@@ -351,200 +351,398 @@ def main():
     
     # Main content area
     if can_analyze and 'analyze_button' in locals() and analyze_button:
-        with st.spinner("Analyzing document... This may take a few minutes."):
-            try:
-                # Display analysis setup
-                st.success("Starting document analysis!")
+        # Create a single progress bar and status display
+        progress_placeholder = st.empty()
+        status_placeholder = st.empty()
+        
+        try:
+            # Initialize progress tracking
+            total_steps = 6
+            current_step = 0
+            
+            # Step 1: Initialize components
+            current_step += 1
+            progress_placeholder.progress(current_step / total_steps)
+            status_placeholder.info(f"Step {current_step}/{total_steps}: Initializing analysis components...")
+            
+            parser = DocumentParser()
+            chunker = TextChunker(chunk_tokens=1000, overlap_tokens=100)
+            analyzer = ThemeAnalyzer()
+            calc = RelationshipCalculator()
+            
+            # Step 2: Extract and process document
+            current_step += 1
+            progress_placeholder.progress(current_step / total_steps)
+            status_placeholder.info(f"Step {current_step}/{total_steps}: Extracting text from document...")
+            
+            extracted_text = parser.extract_text_from_document(uploaded_file)
+            if not extracted_text:
+                st.error("Failed to extract text from document")
+                st.stop()
+            
+            chunks = chunker.chunk_text(extracted_text)
+            if not chunks:
+                st.error("Failed to create text chunks")
+                st.stop()
+            
+            # Get analysis settings
+            threshold = similarity_threshold if 'similarity_threshold' in locals() else 0.7
+            max_themes = max_themes if 'max_themes' in locals() else 15
+            
+            # Step 3: Filter relevant chunks
+            current_step += 1
+            progress_placeholder.progress(current_step / total_steps)
+            status_placeholder.info(f"Step {current_step}/{total_steps}: Finding relevant content using AI analysis...")
+            
+            relevant_chunks = analyzer.filter_relevant_chunks(chunks, all_topics, similarity_threshold=threshold)
+            
+            # Step 4: Extract themes
+            current_step += 1
+            progress_placeholder.progress(current_step / total_steps)
+            status_placeholder.info(f"Step {current_step}/{total_steps}: Extracting themes and calculating relevance...")
+            
+            extracted_themes = analyzer.extract_themes_from_chunks(relevant_chunks, all_topics, max_themes=max_themes)
+            
+            # Step 5: Calculate relationships
+            current_step += 1
+            progress_placeholder.progress(current_step / total_steps)
+            status_placeholder.info(f"Step {current_step}/{total_steps}: Analyzing theme relationships...")
+            
+            relationship_analysis = calc.calculate_theme_relationships(extracted_themes, chunks)
+            
+            # Step 6: Prepare visualization
+            current_step += 1
+            progress_placeholder.progress(current_step / total_steps)
+            status_placeholder.info(f"Step {current_step}/{total_steps}: Preparing visualizations...")
+            
+            viz_data = calc.prepare_visualization_data(extracted_themes, relationship_analysis)
+            
+            # Complete!
+            progress_placeholder.progress(1.0)
+            status_placeholder.success("Analysis complete! Explore the results below.")
+            
+            # Store results in session state for the three sections
+            st.session_state.analysis_results = {
+                'chunks': chunks,
+                'relevant_chunks': relevant_chunks,
+                'extracted_themes': extracted_themes,
+                'relationship_analysis': relationship_analysis,
+                'viz_data': viz_data,
+                'research_topics': all_topics,
+                'document_name': uploaded_file.name
+            }
+            
+        except Exception as e:
+            progress_placeholder.empty()
+            status_placeholder.error(f"Error during analysis: {str(e)}")
+    
+    # Display results if analysis is complete
+    if 'analysis_results' in st.session_state:
+        results = st.session_state.analysis_results
+        
+        # Analysis Summary Header
+        st.markdown("---")
+        st.header("📊 Analysis Results")
+        
+        # Summary metrics
+        summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
+        
+        with summary_col1:
+            st.metric("Document", results['document_name'])
+            st.metric("Total Chunks", len(results['chunks']))
+        
+        with summary_col2:
+            st.metric("Relevant Chunks", len(results['relevant_chunks']))
+            relevance_rate = (len(results['relevant_chunks']) / len(results['chunks'])) * 100 if results['chunks'] else 0
+            st.metric("Relevance Rate", f"{relevance_rate:.1f}%")
+        
+        with summary_col3:
+            st.metric("Extracted Themes", len(results['extracted_themes']))
+            st.metric("Theme Relationships", results['viz_data'].get('relationship_count', 0))
+        
+        with summary_col4:
+            avg_confidence = sum(theme.get('confidence', 0) for theme in results['extracted_themes']) / len(results['extracted_themes']) if results['extracted_themes'] else 0
+            st.metric("Avg Confidence", f"{avg_confidence:.2f}")
+            analysis_method = "GPT-4o-mini" if results['extracted_themes'] and results['extracted_themes'][0].get('source') == 'gpt-4o-mini' else "Keyword Analysis"
+            st.metric("Analysis Method", analysis_method)
+        
+        # Create chunk-theme mapping for tabs
+        chunk_theme_mapping = {}
+        for chunk in results['chunks']:
+            chunk_id = chunk['id']
+            chunk_themes = []
+            
+            # Find themes that appear in this chunk
+            for theme in results['extracted_themes']:
+                if chunk_id in theme.get('chunk_ids', []):
+                    chunk_themes.append({
+                        'name': theme['name'],
+                        'confidence': theme.get('confidence', 0),
+                        'source': theme.get('source', 'unknown'),
+                        'description': theme.get('description', 'No description'),
+                        'evidence': theme.get('evidence', [])
+                    })
+            
+            if chunk_themes:  # Only store chunks that have themes
+                chunk_theme_mapping[chunk_id] = {
+                    'text': chunk['text'],
+                    'themes': chunk_themes,
+                    'relevance_score': chunk.get('relevance_score', 0),
+                    'relevance_method': chunk.get('relevance_method', 'unknown'),
+                    'position': chunk.get('start_position', chunk_id * 1000)
+                }
+        
+        # Create main tabs
+        if results['extracted_themes']:
+            # Create tab names - Overview + All Chunks + individual chunks with themes
+            tab_names = ["📋 Overview", "📊 All Chunks"]
+            
+            # Add chunk tabs only for chunks that have themes
+            sorted_chunk_ids = sorted(chunk_theme_mapping.keys())
+            for chunk_id in sorted_chunk_ids:
+                theme_count = len(chunk_theme_mapping[chunk_id]['themes'])
+                tab_names.append(f"📄 Chunk {chunk_id} ({theme_count} themes)")
+            
+            # Create the tabs
+            tabs = st.tabs(tab_names)
+            
+            # Overview Tab
+            with tabs[0]:
+                st.subheader("🎯 Extracted Themes Overview")
+                st.write("All themes found in the document:")
                 
-                # Show what will be analyzed
-                col1, col2, col3 = st.columns(3)
+                # Display all extracted themes
+                for theme in results['extracted_themes']:
+                    with st.expander(f"**{theme['name']}** - Confidence: {theme.get('confidence', 0):.2f}"):
+                        col1, col2 = st.columns([2, 1])
+                        
+                        with col1:
+                            st.write(f"**Description:** {theme.get('description', 'No description')}")
+                            st.write(f"**Source:** {theme.get('source', 'unknown')}")
+                            st.write(f"**Chunk Frequency:** {theme.get('chunk_frequency', 0)}")
+                            
+                            # Evidence
+                            evidence = theme.get('evidence', [])
+                            if evidence:
+                                st.write("**Key Evidence:**")
+                                for ev in evidence[:3]:
+                                    st.write(f"• {ev}")
+                        
+                        with col2:
+                            # Theme metrics
+                            theme_metrics = results['relationship_analysis'].get('theme_metrics', {}).get(theme['name'], {})
+                            if theme_metrics:
+                                st.metric("Centrality", f"{theme_metrics.get('centrality', 0):.3f}")
+                                st.metric("Importance", f"{theme_metrics.get('importance', 0):.3f}")
+                            
+                            # Show which chunks contain this theme
+                            chunk_ids = theme.get('chunk_ids', [])
+                            if chunk_ids:
+                                st.write("**Found in chunks:**")
+                                st.write(", ".join([f"Chunk {cid}" for cid in chunk_ids[:5]]))
                 
-                with col1:
-                    st.metric("Document", uploaded_file.name)
-                    st.metric("File Size", f"{uploaded_file.size / 1024:.1f} KB")
+                # Research Topics vs Themes Summary
+                st.subheader("🔍 Research Topics Analysis")
+                topic_cols = st.columns(min(3, len(results['research_topics'])))
+                for i, topic in enumerate(results['research_topics']):
+                    with topic_cols[i % len(topic_cols)]:
+                        st.write(f"**{i+1}. {topic}**")
+                        
+                        # Find themes related to this topic
+                        related_themes = []
+                        for theme in results['extracted_themes']:
+                            if any(word.lower() in theme['name'].lower() for word in topic.split() if len(word) > 3):
+                                related_themes.append(theme['name'])
+                        
+                        if related_themes:
+                            st.write("Related themes:")
+                            for rt in related_themes[:3]:
+                                st.write(f"• {rt}")
+                        else:
+                            st.write("No directly related themes found")
+            
+            # All Chunks Tab
+            with tabs[1]:
+                st.subheader("📊 All Document Chunks")
+                st.write("Complete breakdown of all chunks and their relevance analysis:")
                 
-                with col2:
-                    st.metric("Research Topics", len(all_topics))
-                    if 'similarity_threshold' in locals():
-                        st.metric("Relevance Threshold", f"{similarity_threshold:.1f}")
-                
-                with col3:
-                    if 'max_themes' in locals():
-                        st.metric("Max Themes", max_themes)
-                    st.metric("Status", "Processing")
-                
-                # Display topics being searched
-                st.subheader("Topics Being Analyzed:")
-                topic_cols = st.columns(3)
-                for i, topic in enumerate(all_topics):
-                    with topic_cols[i % 3]:
-                        st.write(f"• {topic}")
-                
-                # Step 1: Extract text from document
-                st.subheader("Step 1: Document Text Extraction")
-                progress_bar = st.progress(0)
-                
-                parser = DocumentParser()
-                extracted_text = parser.extract_text_from_document(uploaded_file)
-                progress_bar.progress(20)
-                
-                if not extracted_text:
-                    st.error("Failed to extract text from document")
-                    st.stop()
-                
-                st.success(f"Extracted {len(extracted_text)} characters from document")
-                
-                # Step 2: Chunk the text
-                st.subheader("Step 2: Text Chunking")
-                chunker = TextChunker(chunk_tokens=1000, overlap_tokens=100)
-                chunks = chunker.chunk_text(extracted_text)
-                progress_bar.progress(40)
-                
-                if not chunks:
-                    st.error("Failed to create text chunks")
-                    st.stop()
-                
-                # Display chunking stats
-                chunk_stats = chunker.get_chunk_stats(chunks)
-                stats_col1, stats_col2, stats_col3, stats_col4 = st.columns(4)
-                
-                with stats_col1:
-                    st.metric("Total Chunks", chunk_stats.get('total_chunks', 0))
-                
-                with stats_col2:
-                    st.metric("Avg Tokens/Chunk", f"{chunk_stats.get('average_tokens_per_chunk', 0):.0f}")
-                
-                with stats_col3:
-                    st.metric("Total Tokens", f"{chunk_stats.get('total_tokens', 0):,}")
-                
-                with stats_col4:
-                    st.metric("Total Words", f"{chunk_stats.get('total_words', 0):,}")
-                
-                st.success(f"Created {len(chunks)} chunks for analysis")
-                
-                # Step 3: AI Relevance Filtering
-                st.subheader("Step 3: AI Relevance Filtering")
-                progress_bar.progress(60)
-                
-                # Filter chunks based on relevance to research topics using AI
-                analyzer = ThemeAnalyzer()
-                
-                # Use similarity threshold from settings, or default
-                threshold = similarity_threshold if 'similarity_threshold' in locals() else 0.7
-                
-                relevant_chunks = analyzer.filter_relevant_chunks(
-                    chunks, 
-                    all_topics, 
-                    similarity_threshold=threshold
-                )
-                
-                progress_bar.progress(80)
-                
-                # Display relevance results
-                if relevant_chunks:
-                    relevance_col1, relevance_col2, relevance_col3 = st.columns(3)
+                # Create summary table
+                chunk_summary_data = []
+                for chunk in results['chunks']:
+                    chunk_id = chunk['id']
+                    is_relevant = chunk_id in [rc['id'] for rc in results['relevant_chunks']]
+                    has_themes = chunk_id in chunk_theme_mapping
+                    theme_count = len(chunk_theme_mapping[chunk_id]['themes']) if has_themes else 0
+                    relevance_score = chunk.get('relevance_score', 0)
+                    token_count = chunk.get('token_count', 0)
                     
-                    with relevance_col1:
-                        st.metric("Relevant Chunks", len(relevant_chunks))
+                    chunk_summary_data.append({
+                        'chunk_id': chunk_id,
+                        'is_relevant': is_relevant,
+                        'has_themes': has_themes,
+                        'theme_count': theme_count,
+                        'relevance_score': relevance_score,
+                        'token_count': token_count,
+                        'text_preview': chunk['text'][:100] + "..." if len(chunk['text']) > 100 else chunk['text']
+                    })
+                
+                # Display summary
+                st.write(f"**Total chunks in document: {len(results['chunks'])}**")
+                st.write(f"**Relevant chunks (passed filtering): {len(results['relevant_chunks'])}**")
+                st.write(f"**Chunks with themes extracted: {len(chunk_theme_mapping)}**")
+                
+                # Show each chunk status
+                for chunk_data in chunk_summary_data:
+                    chunk_id = chunk_data['chunk_id']
                     
-                    with relevance_col2:
-                        st.metric("Total Chunks", len(chunks))
+                    # Determine status and color
+                    if chunk_data['has_themes']:
+                        status = f"✅ Has {chunk_data['theme_count']} themes"
+                        status_color = "normal"
+                    elif chunk_data['is_relevant']:
+                        status = "🟡 Relevant but no themes extracted"
+                        status_color = "normal"
+                    else:
+                        status = "❌ Not relevant (filtered out)"
+                        status_color = "normal"
                     
-                    with relevance_col3:
-                        relevance_percentage = (len(relevant_chunks) / len(chunks)) * 100
-                        st.metric("Relevance Rate", f"{relevance_percentage:.1f}%")
+                    with st.expander(f"**Chunk {chunk_id}** - {status} (Tokens: {chunk_data['token_count']:,})"):
+                        col1, col2 = st.columns([3, 1])
+                        
+                        with col1:
+                            st.write("**Text Preview:**")
+                            st.write(f"*{chunk_data['text_preview']}*")
+                        
+                        with col2:
+                            st.metric("Relevance Score", f"{chunk_data['relevance_score']:.2f}")
+                            st.metric("Token Count", f"{chunk_data['token_count']:,}")
+                            st.metric("Theme Count", chunk_data['theme_count'])
+                            
+                            if not chunk_data['is_relevant']:
+                                st.write("**Why filtered out:**")
+                                if chunk_data['relevance_score'] < 0.7:
+                                    st.write(f"Relevance score ({chunk_data['relevance_score']:.2f}) below threshold (0.7)")
+                                else:
+                                    st.write("No specific reason found")
+            
+            # Individual Chunk Tabs
+            for i, chunk_id in enumerate(sorted_chunk_ids):
+                with tabs[i + 2]:  # +2 because first tab is overview, second is all chunks
+                    chunk_data = chunk_theme_mapping[chunk_id]
+                    theme_count = len(chunk_data['themes'])
+                    relevance = chunk_data['relevance_score']
                     
-                    st.success(f"AI filtering identified {len(relevant_chunks)} relevant chunks")
+                    # Chunk header info
+                    st.subheader(f"📄 Chunk {chunk_id} Analysis")
                     
-                    # Show analysis method used
-                    method = relevant_chunks[0].get('relevance_method', 'unknown')
-                    if method == 'ai_embedding':
-                        st.info("Used AI embeddings for relevance analysis")
-                    elif method == 'keyword_matching':
-                        st.info("Used keyword matching (AI embeddings unavailable)")
+                    info_col1, info_col2, info_col3, info_col4 = st.columns(4)
+                    with info_col1:
+                        st.metric("Themes Found", theme_count)
+                    with info_col2:
+                        st.metric("Relevance Score", f"{relevance:.2f}")
+                    with info_col3:
+                        st.metric("Analysis Method", chunk_data['relevance_method'])
+                    with info_col4:
+                        # Get token count from original chunk data
+                        original_chunk = next((c for c in results['chunks'] if c['id'] == chunk_id), None)
+                        token_count = original_chunk.get('token_count', 0) if original_chunk else 0
+                        st.metric("Token Count", f"{token_count:,}")
                     
-                    # Step 4: Theme Extraction
-                    st.subheader("Step 4: Theme Extraction")
-                    progress_bar.progress(85)
+                    st.write(f"**Document Position:** ~{chunk_data['position']:,} characters")
                     
-                    max_themes = max_themes if 'max_themes' in locals() else 15
-                    extracted_themes = analyzer.extract_themes_from_chunks(
-                        relevant_chunks, 
-                        all_topics, 
-                        max_themes=max_themes
+                    # Full chunk text
+                    st.subheader("📖 Full Chunk Text")
+                    st.text_area(
+                        "Chunk Content", 
+                        chunk_data['text'], 
+                        height=300, 
+                        key=f"chunk_content_{chunk_id}",
+                        disabled=True
                     )
                     
-                    progress_bar.progress(90)
+                    # Themes found in this chunk
+                    st.subheader(f"🎯 Themes Extracted from this Chunk ({theme_count})")
                     
-                    if extracted_themes:
-                        st.success(f"Extracted {len(extracted_themes)} themes using {'GPT-4o-mini' if analyzer.has_api_key else 'keyword analysis'}")
-                        
-                        # Step 5: Calculate Theme Relationships
-                        st.subheader("Step 5: Theme Relationship Analysis")
-                        
-                        calc = RelationshipCalculator()
-                        relationship_analysis = calc.calculate_theme_relationships(extracted_themes, chunks)
-                        
-                        # Prepare visualization data
-                        viz_data = calc.prepare_visualization_data(extracted_themes, relationship_analysis)
-                        
-                        progress_bar.progress(95)
-                        
-                        # Display theme analysis results
-                        theme_col1, theme_col2, theme_col3, theme_col4 = st.columns(4)
-                        
-                        with theme_col1:
-                            st.metric("Extracted Themes", len(extracted_themes))
-                        
-                        with theme_col2:
-                            st.metric("Theme Relationships", viz_data.get('relationship_count', 0))
-                        
-                        with theme_col3:
-                            st.metric("Avg Confidence", f"{viz_data.get('avg_confidence', 0):.2f}")
-                        
-                        with theme_col4:
-                            strong_rels = viz_data.get('strong_relationships', 0)
-                            st.metric("Strong Relationships", strong_rels)
-                        
-                        # Step 6: Create Visualizations
-                        st.subheader("Step 6: Theme Relevance Visualization")
-                        
-                        # Create relevance visualization
-                        _display_theme_relevance_charts(extracted_themes, all_topics, viz_data)
-                        
-                        # Display extracted themes in detail
-                        st.subheader("Extracted Themes Details:")
-                        for i, theme in enumerate(extracted_themes[:5]):  # Show top 5
-                            with st.expander(f"{theme['name']} - Confidence: {theme.get('confidence', 0):.2f}"):
-                                st.write(f"**Description:** {theme.get('description', 'No description')}")
-                                st.write(f"**Source:** {theme.get('source', 'unknown')}")
-                                st.write(f"**Chunk Frequency:** {theme.get('chunk_frequency', 0)}")
+                    for theme_info in chunk_data['themes']:
+                        with st.expander(f"**{theme_info['name']}** - Confidence: {theme_info['confidence']:.2f}"):
+                            col1, col2 = st.columns([1, 1])
+                            
+                            with col1:
+                                st.write(f"**Description:** {theme_info['description']}")
+                                st.write(f"**Source:** {theme_info['source']}")
                                 
-                                # Theme metrics from relationship analysis
-                                theme_metrics = relationship_analysis.get('theme_metrics', {}).get(theme['name'], {})
-                                if theme_metrics:
-                                    st.write(f"**Centrality:** {theme_metrics.get('centrality', 0):.3f}")
-                                    st.write(f"**Importance:** {theme_metrics.get('importance', 0):.3f}")
+                                if theme_info['evidence']:
+                                    st.write("**AI-Extracted Evidence:**")
+                                    for evidence in theme_info['evidence'][:3]:
+                                        st.write(f"• *{evidence}*")
+                            
+                            with col2:
+                                st.write("**Evidence in This Chunk:**")
                                 
-                                evidence = theme.get('evidence', [])
-                                if evidence:
-                                    st.write("**Key Evidence:**")
-                                    for j, ev in enumerate(evidence[:3]):
-                                        st.write(f"• {ev}")
-                        
-                        progress_bar.progress(100)
-                        st.success("Complete theme analysis finished with interactive visualizations!")
-                    
-                    else:
-                        st.warning("No themes could be extracted from the relevant chunks.")
-                        progress_bar.progress(100)
-                
-                else:
-                    st.warning("No relevant chunks found with the current relevance threshold. Try lowering the threshold or using different research topics.")
-                    progress_bar.progress(100)
-                
-            except Exception as e:
-                st.error(f"Error during analysis: {str(e)}")
+                                # Find sentences in the chunk that relate to this theme
+                                chunk_text = chunk_data['text']
+                                theme_related_sentences = []
+                                
+                                # Split chunk into sentences
+                                sentences = chunk_text.replace('.', '.\n').replace('!', '!\n').replace('?', '?\n').split('\n')
+                                sentences = [s.strip() for s in sentences if s.strip()]
+                                
+                                # Look for theme-related content in sentences
+                                theme_words = theme_info['name'].lower().split()
+                                theme_words = [word for word in theme_words if len(word) > 3]  # Filter short words
+                                
+                                # Also check evidence words
+                                evidence_words = []
+                                for evidence in theme_info.get('evidence', []):
+                                    evidence_words.extend([word.lower() for word in evidence.split() if len(word) > 3])
+                                
+                                all_search_words = list(set(theme_words + evidence_words))
+                                
+                                for sentence in sentences:
+                                    sentence_lower = sentence.lower()
+                                    # Check if sentence contains theme or evidence words
+                                    if any(word in sentence_lower for word in all_search_words):
+                                        # Highlight the matching words
+                                        highlighted_sentence = sentence
+                                        for word in all_search_words:
+                                            if word in sentence_lower:
+                                                # Simple highlighting with markdown bold
+                                                highlighted_sentence = highlighted_sentence.replace(
+                                                    word, f"**{word}**"
+                                                ).replace(
+                                                    word.capitalize(), f"**{word.capitalize()}**"
+                                                ).replace(
+                                                    word.upper(), f"**{word.upper()}**"
+                                                )
+                                        theme_related_sentences.append(highlighted_sentence)
+                                
+                                if theme_related_sentences:
+                                    for i, sentence in enumerate(theme_related_sentences[:3]):  # Show top 3
+                                        st.write(f"📝 {sentence}")
+                                        if i < len(theme_related_sentences) - 1:
+                                            st.write("")  # Add space between sentences
+                                else:
+                                    st.write("*No specific evidence sentences found in this chunk*")
+                                    
+                                    # Fallback: show context around theme words
+                                    if theme_words:
+                                        st.write("**Theme context:**")
+                                        for word in theme_words[:2]:
+                                            if word in chunk_text.lower():
+                                                # Find context around the word
+                                                word_index = chunk_text.lower().find(word)
+                                                start = max(0, word_index - 50)
+                                                end = min(len(chunk_text), word_index + len(word) + 50)
+                                                context = chunk_text[start:end]
+                                                if start > 0:
+                                                    context = "..." + context
+                                                if end < len(chunk_text):
+                                                    context = context + "..."
+                                                st.write(f"• *{context}*")
+                                                break
+        
+        else:
+            st.info("No themes were extracted from the document.")
     
     elif not can_analyze:
         # Show welcome screen and instructions

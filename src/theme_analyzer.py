@@ -68,7 +68,7 @@ class ThemeAnalyzer:
             return chunks
         
         try:
-            st.info("Using AI to analyze chunk relevance...")
+            # AI analysis in progress - status handled by main app
             
             # Combine research topics into a single query for embedding
             combined_topics = " ".join(research_topics)
@@ -109,14 +109,12 @@ class ThemeAnalyzer:
                         chunk['relevance_method'] = 'ai_embedding'
                         relevant_chunks.append(chunk)
                 
-                # Ensure progress value stays within 0.0-1.0 range
-                progress_value = min(1.0, (i + batch_size) / len(chunks))
-                st.progress(progress_value)
+                # Progress tracking handled by main app
             
             # Sort by relevance score (highest first)
             relevant_chunks.sort(key=lambda x: x['relevance_score'], reverse=True)
             
-            st.success(f"AI analysis found {len(relevant_chunks)} relevant chunks out of {len(chunks)}")
+            # Analysis complete - detailed results will be shown in main app
             return relevant_chunks
             
         except Exception as e:
@@ -197,7 +195,7 @@ class ThemeAnalyzer:
             return self._fallback_theme_extraction(relevant_chunks, research_topics, max_themes)
         
         try:
-            st.info("Using GPT-4o-mini for theme extraction...")
+            # Theme extraction in progress - status handled by main app
             
             # Process chunks in smaller batches for better theme extraction
             all_themes = []
@@ -252,14 +250,12 @@ Text to analyze:
                 except Exception as e:
                     st.warning(f"Failed to parse themes from batch {i//batch_size + 1}: {e}")
                 
-                # Fix progress calculation to stay within 0.0-1.0 range
-                progress_value = min(1.0, (i + batch_size) / min(len(relevant_chunks), 20))
-                st.progress(progress_value)
+                # Progress tracking handled by main app
             
             # Deduplicate and consolidate themes
             consolidated_themes = self._consolidate_themes(all_themes, max_themes)
             
-            st.success(f"Extracted {len(consolidated_themes)} themes using GPT-4o-mini")
+            # Theme extraction complete - results will be displayed in main app
             return consolidated_themes
             
         except Exception as e:

@@ -29,7 +29,7 @@ class RelationshipCalculator:
         if not themes:
             return {'cooccurrence': {}, 'correlations': {}, 'theme_metrics': {}}
         
-        st.info("Calculating theme relationships...")
+        # Relationship calculation in progress - status handled by main app
         
         # Step 1: Calculate co-occurrence matrix
         cooccurrence = self.calculate_cooccurrence(themes, all_chunks)
