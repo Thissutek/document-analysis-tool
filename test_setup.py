@@ -11,6 +11,7 @@ def test_imports():
         import pandas
         import plotly
         import PyPDF2
+        import docx
         import numpy
         import sklearn
         import dotenv

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Streamlit application for document theme analysis that processes PDF documents to identify themes and visualize their relationships through interactive bubble graphs. The project is currently in planning/setup phase with only the README.md present.
+This is a Streamlit application for document theme analysis that processes PDF and DOCX documents to identify themes and visualize their relationships through interactive bubble graphs. The project has a complete development environment and input form ready.
 
 ## Development Setup
 
@@ -30,29 +30,30 @@ The application follows a modular structure with these key components:
 
 ### Core Modules
 - `app.py` - Main Streamlit application entry point
-- `src/document_parser.py` - PDF text extraction using PyPDF2
+- `src/document_parser.py` - PDF and DOCX text extraction using PyPDF2 and python-docx
 - `src/text_chunker.py` - Document segmentation with simple for-loop chunking
 - `src/theme_analyzer.py` - AI-powered theme extraction using OpenAI GPT-4o-mini
 - `src/relationship_calc.py` - Theme correlation analysis and co-occurrence counting
 - `src/visualizer.py` - Streamlit visualization with Plotly bubble charts
 
 ### Data Flow
-1. PDF upload and text extraction
+1. Document upload (PDF/DOCX) and text extraction
 2. Simple fixed-size text chunking with position tracking
 3. Combined relevance filtering and theme extraction using OpenAI embeddings + GPT-4o-mini
 4. Theme relationship calculation (co-occurrence and correlation)
 5. Interactive visualization generation
 
-### Dependencies (from README)
+### Dependencies
 ```
-streamlit==1.29.0
-PyPDF2==3.0.1
-openai==1.3.0
-pandas==2.1.0
-plotly==5.17.0
-numpy==1.25.0
-scikit-learn==1.3.0
-python-dotenv==1.0.0
+streamlit>=1.35.0
+PyPDF2>=3.0.1
+python-docx>=1.1.0
+openai>=1.50.0
+pandas>=2.2.0
+plotly>=5.17.0
+numpy>=1.26.0
+scikit-learn>=1.5.0
+python-dotenv>=1.0.0
 ```
 
 ## Development Notes
