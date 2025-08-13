@@ -52,6 +52,165 @@ def validate_and_format_topics(topics_list):
     
     return valid_topics, warnings
 
+def _display_theme_relevance_charts(extracted_themes, research_topics, viz_data):
+    """Display interactive charts showing theme relevance and relationships"""
+    import plotly.express as px
+    import plotly.graph_objects as go
+    import pandas as pd
+    
+    if not extracted_themes:
+        st.warning("No themes available for visualization")
+        return
+    
+    # Chart 1: Theme Confidence vs Frequency
+    st.write("**Theme Confidence and Frequency Analysis:**")
+    
+    theme_data = []
+    for theme in extracted_themes:
+        # Get importance from viz_data nodes
+        importance = 0.5  # default
+        for node in viz_data.get('nodes', []):
+            if node.get('id') == theme['name']:
+                importance = node.get('importance', 0.5)
+                break
+        
+        theme_data.append({
+            'Theme': theme['name'],
+            'Confidence': theme.get('confidence', 0),
+            'Frequency': theme.get('chunk_frequency', 0),
+            'Source': theme.get('source', 'unknown'),
+            'Importance': importance
+        })
+    
+    df = pd.DataFrame(theme_data)
+    
+    if not df.empty:
+        # Scatter plot: Confidence vs Frequency
+        fig1 = px.scatter(
+            df, 
+            x='Confidence', 
+            y='Frequency',
+            size='Importance',
+            color='Source',
+            hover_name='Theme',
+            title="Theme Confidence vs Document Frequency",
+            labels={'Confidence': 'Confidence Score (0-1)', 'Frequency': 'Document Chunks'},
+            size_max=20
+        )
+        
+        fig1.update_layout(
+            xaxis=dict(range=[0, 1]),
+            height=400
+        )
+        
+        st.plotly_chart(fig1, use_container_width=True)
+    
+    # Chart 2: Research Topics vs Extracted Themes Alignment
+    st.write("**Research Topics vs Extracted Themes Alignment:**")
+    
+    # Calculate topic-theme alignment scores
+    topic_theme_data = []
+    for topic in research_topics:
+        topic_lower = topic.lower()
+        for theme in extracted_themes:
+            theme_name = theme['name']
+            theme_lower = theme_name.lower()
+            
+            # Simple alignment calculation based on word overlap
+            topic_words = set(topic_lower.split())
+            theme_words = set(theme_lower.split())
+            
+            if topic_words and theme_words:
+                alignment = len(topic_words.intersection(theme_words)) / len(topic_words.union(theme_words))
+            else:
+                alignment = 0
+            
+            # Also check if topic words appear in theme description
+            description = theme.get('description', '').lower()
+            description_alignment = sum(1 for word in topic_words if word in description) / len(topic_words) if topic_words else 0
+            
+            final_alignment = max(alignment, description_alignment * 0.8)  # Weight description less
+            
+            if final_alignment > 0.1:  # Only show meaningful alignments
+                topic_theme_data.append({
+                    'Research Topic': topic,
+                    'Extracted Theme': theme_name,
+                    'Alignment Score': final_alignment,
+                    'Theme Confidence': theme.get('confidence', 0),
+                    'Theme Frequency': theme.get('chunk_frequency', 0)
+                })
+    
+    if topic_theme_data:
+        alignment_df = pd.DataFrame(topic_theme_data)
+        
+        # Bar chart showing alignment scores
+        fig3 = px.bar(
+            alignment_df.sort_values('Alignment Score', ascending=True),
+            x='Alignment Score',
+            y='Extracted Theme',
+            color='Research Topic',
+            title="Theme Alignment with Research Topics",
+            orientation='h',
+            hover_data=['Theme Confidence', 'Theme Frequency']
+        )
+        
+        fig3.update_layout(height=max(300, len(topic_theme_data) * 25))
+        st.plotly_chart(fig3, use_container_width=True)
+    
+    else:
+        st.info("No strong alignments found between research topics and extracted themes")
+    
+    # Chart 3: Theme Relationship Network (if relationships exist)
+    edges = viz_data.get('edges', [])
+    if edges:
+        st.write("**Theme Relationship Strengths:**")
+        
+        # Create network visualization data
+        edge_data = []
+        for edge in edges:
+            edge_data.append({
+                'Source Theme': edge['source'],
+                'Target Theme': edge['target'],
+                'Relationship Strength': edge['strength'],
+                'Co-occurrence': edge.get('cooccurrence_count', 0)
+            })
+        
+        if edge_data:
+            edge_df = pd.DataFrame(edge_data)
+            
+            # Bar chart of relationship strengths
+            fig4 = px.bar(
+                edge_df.sort_values('Relationship Strength', ascending=True),
+                x='Relationship Strength',
+                y=[f"{row['Source Theme']} ↔ {row['Target Theme']}" for _, row in edge_df.iterrows()],
+                title="Theme Relationship Strengths",
+                orientation='h',
+                hover_data=['Co-occurrence']
+            )
+            
+            fig4.update_layout(height=max(300, len(edge_data) * 30))
+            st.plotly_chart(fig4, use_container_width=True)
+    
+    # Summary metrics
+    if extracted_themes:
+        st.write("**Visualization Summary:**")
+        summary_col1, summary_col2, summary_col3 = st.columns(3)
+        
+        with summary_col1:
+            avg_confidence = sum(theme.get('confidence', 0) for theme in extracted_themes) / len(extracted_themes)
+            st.metric("Average Theme Confidence", f"{avg_confidence:.2f}")
+        
+        with summary_col2:
+            total_frequency = sum(theme.get('chunk_frequency', 0) for theme in extracted_themes)
+            st.metric("Total Theme Frequency", total_frequency)
+        
+        with summary_col3:
+            if topic_theme_data:
+                avg_alignment = sum(item['Alignment Score'] for item in topic_theme_data) / len(topic_theme_data)
+                st.metric("Average Topic Alignment", f"{avg_alignment:.2f}")
+            else:
+                st.metric("Average Topic Alignment", "N/A")
+
 # Import custom modules (will be created)
 try:
     from src.document_parser import DocumentParser
@@ -212,7 +371,7 @@ def main():
                 with col3:
                     if 'max_themes' in locals():
                         st.metric("Max Themes", max_themes)
-                    st.metric("Status", "Ready to Process")
+                    st.metric("Status", "Processing")
                 
                 # Display topics being searched
                 st.subheader("Topics Being Analyzed:")
@@ -221,7 +380,168 @@ def main():
                     with topic_cols[i % 3]:
                         st.write(f"• {topic}")
                 
-                st.info("Full analysis functionality will be implemented in the next steps.")
+                # Step 1: Extract text from document
+                st.subheader("Step 1: Document Text Extraction")
+                progress_bar = st.progress(0)
+                
+                parser = DocumentParser()
+                extracted_text = parser.extract_text_from_document(uploaded_file)
+                progress_bar.progress(20)
+                
+                if not extracted_text:
+                    st.error("Failed to extract text from document")
+                    st.stop()
+                
+                st.success(f"Extracted {len(extracted_text)} characters from document")
+                
+                # Step 2: Chunk the text
+                st.subheader("Step 2: Text Chunking")
+                chunker = TextChunker(chunk_tokens=1000, overlap_tokens=100)
+                chunks = chunker.chunk_text(extracted_text)
+                progress_bar.progress(40)
+                
+                if not chunks:
+                    st.error("Failed to create text chunks")
+                    st.stop()
+                
+                # Display chunking stats
+                chunk_stats = chunker.get_chunk_stats(chunks)
+                stats_col1, stats_col2, stats_col3, stats_col4 = st.columns(4)
+                
+                with stats_col1:
+                    st.metric("Total Chunks", chunk_stats.get('total_chunks', 0))
+                
+                with stats_col2:
+                    st.metric("Avg Tokens/Chunk", f"{chunk_stats.get('average_tokens_per_chunk', 0):.0f}")
+                
+                with stats_col3:
+                    st.metric("Total Tokens", f"{chunk_stats.get('total_tokens', 0):,}")
+                
+                with stats_col4:
+                    st.metric("Total Words", f"{chunk_stats.get('total_words', 0):,}")
+                
+                st.success(f"Created {len(chunks)} chunks for analysis")
+                
+                # Step 3: AI Relevance Filtering
+                st.subheader("Step 3: AI Relevance Filtering")
+                progress_bar.progress(60)
+                
+                # Filter chunks based on relevance to research topics using AI
+                analyzer = ThemeAnalyzer()
+                
+                # Use similarity threshold from settings, or default
+                threshold = similarity_threshold if 'similarity_threshold' in locals() else 0.7
+                
+                relevant_chunks = analyzer.filter_relevant_chunks(
+                    chunks, 
+                    all_topics, 
+                    similarity_threshold=threshold
+                )
+                
+                progress_bar.progress(80)
+                
+                # Display relevance results
+                if relevant_chunks:
+                    relevance_col1, relevance_col2, relevance_col3 = st.columns(3)
+                    
+                    with relevance_col1:
+                        st.metric("Relevant Chunks", len(relevant_chunks))
+                    
+                    with relevance_col2:
+                        st.metric("Total Chunks", len(chunks))
+                    
+                    with relevance_col3:
+                        relevance_percentage = (len(relevant_chunks) / len(chunks)) * 100
+                        st.metric("Relevance Rate", f"{relevance_percentage:.1f}%")
+                    
+                    st.success(f"AI filtering identified {len(relevant_chunks)} relevant chunks")
+                    
+                    # Show analysis method used
+                    method = relevant_chunks[0].get('relevance_method', 'unknown')
+                    if method == 'ai_embedding':
+                        st.info("Used AI embeddings for relevance analysis")
+                    elif method == 'keyword_matching':
+                        st.info("Used keyword matching (AI embeddings unavailable)")
+                    
+                    # Step 4: Theme Extraction
+                    st.subheader("Step 4: Theme Extraction")
+                    progress_bar.progress(85)
+                    
+                    max_themes = max_themes if 'max_themes' in locals() else 15
+                    extracted_themes = analyzer.extract_themes_from_chunks(
+                        relevant_chunks, 
+                        all_topics, 
+                        max_themes=max_themes
+                    )
+                    
+                    progress_bar.progress(90)
+                    
+                    if extracted_themes:
+                        st.success(f"Extracted {len(extracted_themes)} themes using {'GPT-4o-mini' if analyzer.has_api_key else 'keyword analysis'}")
+                        
+                        # Step 5: Calculate Theme Relationships
+                        st.subheader("Step 5: Theme Relationship Analysis")
+                        
+                        calc = RelationshipCalculator()
+                        relationship_analysis = calc.calculate_theme_relationships(extracted_themes, chunks)
+                        
+                        # Prepare visualization data
+                        viz_data = calc.prepare_visualization_data(extracted_themes, relationship_analysis)
+                        
+                        progress_bar.progress(95)
+                        
+                        # Display theme analysis results
+                        theme_col1, theme_col2, theme_col3, theme_col4 = st.columns(4)
+                        
+                        with theme_col1:
+                            st.metric("Extracted Themes", len(extracted_themes))
+                        
+                        with theme_col2:
+                            st.metric("Theme Relationships", viz_data.get('relationship_count', 0))
+                        
+                        with theme_col3:
+                            st.metric("Avg Confidence", f"{viz_data.get('avg_confidence', 0):.2f}")
+                        
+                        with theme_col4:
+                            strong_rels = viz_data.get('strong_relationships', 0)
+                            st.metric("Strong Relationships", strong_rels)
+                        
+                        # Step 6: Create Visualizations
+                        st.subheader("Step 6: Theme Relevance Visualization")
+                        
+                        # Create relevance visualization
+                        _display_theme_relevance_charts(extracted_themes, all_topics, viz_data)
+                        
+                        # Display extracted themes in detail
+                        st.subheader("Extracted Themes Details:")
+                        for i, theme in enumerate(extracted_themes[:5]):  # Show top 5
+                            with st.expander(f"{theme['name']} - Confidence: {theme.get('confidence', 0):.2f}"):
+                                st.write(f"**Description:** {theme.get('description', 'No description')}")
+                                st.write(f"**Source:** {theme.get('source', 'unknown')}")
+                                st.write(f"**Chunk Frequency:** {theme.get('chunk_frequency', 0)}")
+                                
+                                # Theme metrics from relationship analysis
+                                theme_metrics = relationship_analysis.get('theme_metrics', {}).get(theme['name'], {})
+                                if theme_metrics:
+                                    st.write(f"**Centrality:** {theme_metrics.get('centrality', 0):.3f}")
+                                    st.write(f"**Importance:** {theme_metrics.get('importance', 0):.3f}")
+                                
+                                evidence = theme.get('evidence', [])
+                                if evidence:
+                                    st.write("**Key Evidence:**")
+                                    for j, ev in enumerate(evidence[:3]):
+                                        st.write(f"• {ev}")
+                        
+                        progress_bar.progress(100)
+                        st.success("Complete theme analysis finished with interactive visualizations!")
+                    
+                    else:
+                        st.warning("No themes could be extracted from the relevant chunks.")
+                        progress_bar.progress(100)
+                
+                else:
+                    st.warning("No relevant chunks found with the current relevance threshold. Try lowering the threshold or using different research topics.")
+                    progress_bar.progress(100)
                 
             except Exception as e:
                 st.error(f"Error during analysis: {str(e)}")

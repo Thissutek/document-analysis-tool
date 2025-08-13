@@ -12,6 +12,7 @@ def test_imports():
         import plotly
         import PyPDF2
         import docx
+        import tiktoken
         import numpy
         import sklearn
         import dotenv

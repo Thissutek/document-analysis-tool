@@ -1,0 +1,241 @@
+# Cursor Rules for Document Theme Analysis Tool
+
+## Project Overview
+This is a Streamlit application for document theme analysis that processes PDF and DOCX documents to identify themes and visualize their relationships through interactive bubble graphs. The project uses OpenAI GPT-4o-mini for cost-effective AI analysis with robust fallback mechanisms.
+
+## Architecture Guidelines
+
+### Module Structure
+- Follow the established modular architecture in `src/` directory
+- Each module should have a single responsibility and clear interface
+- Maintain separation between document processing, AI analysis, and visualization
+- Use consistent error handling patterns across all modules
+
+### Code Organization
+- Keep `app.py` focused on Streamlit UI and orchestration
+- Place business logic in appropriate `src/` modules
+- Use type hints consistently for all function parameters and returns
+- Follow the established naming conventions (snake_case for functions, PascalCase for classes)
+
+## AI Integration Rules
+
+### OpenAI API Usage
+- **ALWAYS** use GPT-4o-mini for cost optimization (not GPT-4)
+- Implement robust fallback mechanisms when API is unavailable
+- Use batch processing to minimize API calls
+- Set reasonable token limits (max_tokens=800 for theme extraction)
+- Use temperature=0.2 for consistent, focused results
+
+### Error Handling for AI
+- Always check for API key availability before making calls
+- Implement graceful degradation to keyword-based analysis
+- Provide clear user feedback about which method is being used
+- Log API errors but don't crash the application
+
+### Cost Optimization
+- Limit document processing to most relevant chunks (max 20 chunks)
+- Use small batch sizes (5 chunks) for theme extraction
+- Implement text truncation (3000 chars) for API calls
+- Monitor and report estimated costs to users
+
+## Document Processing Rules
+
+### File Support
+- Support both PDF (PyPDF2) and DOCX (python-docx) formats
+- Implement proper error handling for corrupted files
+- Clean and normalize extracted text consistently
+- Preserve document structure where possible
+
+### Text Chunking
+- Use tiktoken for accurate token counting
+- Default chunk size: 1000 tokens with 100 token overlap
+- Maintain chunk metadata (position, word count, token count)
+- Provide comprehensive chunk statistics
+
+## Data Structure Standards
+
+### Theme Objects
+```python
+theme = {
+    'name': 'Theme Name',
+    'description': 'Brief description',
+    'evidence': ['key phrase 1', 'key phrase 2'],
+    'chunk_ids': [1, 3, 5],
+    'confidence': 0.85,
+    'chunk_frequency': 3,
+    'source': 'gpt-4o-mini'  # or 'keyword_analysis'
+}
+```
+
+### Visualization Data
+- Use consistent node/edge structure for Plotly charts
+- Include comprehensive metadata for interactive features
+- Normalize values appropriately for visualization scaling
+- Provide fallback data structures when analysis fails
+
+## Streamlit UI Guidelines
+
+### User Experience
+- Provide real-time progress feedback for long operations
+- Use expandable sections for detailed information
+- Implement clear error messages and recovery suggestions
+- Show analysis method transparency (AI vs fallback)
+
+### Input Validation
+- Validate and clean user inputs (topics, questions)
+- Enforce reasonable limits (3-200 chars for topics)
+- Remove duplicates and normalize formatting
+- Provide helpful warnings for invalid inputs
+
+### Progress Tracking
+- Use st.progress() for multi-step operations
+- Provide meaningful step descriptions
+- Show intermediate results and statistics
+- Handle cancellation gracefully
+
+## Testing Requirements
+
+### Test Coverage
+- Maintain comprehensive test suite in test_*.py files
+- Test both AI and fallback analysis paths
+- Validate document parsing for different file types
+- Test visualization data preparation
+
+### Error Scenarios
+- Test API failures and fallback mechanisms
+- Validate handling of corrupted or unsupported files
+- Test with empty or invalid user inputs
+- Verify graceful degradation in all scenarios
+
+## Performance Guidelines
+
+### Optimization
+- Use efficient data structures (sets for lookups, lists for order)
+- Implement batch processing for API calls
+- Cache embeddings when possible
+- Limit memory usage for large documents
+
+### Scalability
+- Handle documents up to 50,000 tokens efficiently
+- Process chunks in manageable batches
+- Provide progress feedback for long operations
+- Implement reasonable timeouts
+
+## Security and Privacy
+
+### API Key Management
+- Never hardcode API keys in source code
+- Use environment variables (.env file)
+- Validate API key format and availability
+- Provide clear setup instructions
+
+### Data Handling
+- Don't log sensitive document content
+- Implement proper error messages without exposing internals
+- Handle user data securely in Streamlit sessions
+- Clear sensitive data when appropriate
+
+## Documentation Standards
+
+### Code Documentation
+- Use docstrings for all public functions and classes
+- Include type hints for all parameters and returns
+- Document expected data structures and formats
+- Provide usage examples in docstrings
+
+### User Documentation
+- Maintain clear README with setup instructions
+- Document API costs and optimization strategies
+- Provide troubleshooting guides
+- Include example use cases and expected outputs
+
+## Error Handling Patterns
+
+### Consistent Error Handling
+```python
+try:
+    # AI operation
+    result = ai_operation()
+except Exception as e:
+    st.warning(f"AI operation failed: {str(e)}. Using fallback method.")
+    result = fallback_operation()
+```
+
+### User Feedback
+- Always inform users about which analysis method is being used
+- Provide clear error messages with actionable suggestions
+- Show warnings for degraded functionality
+- Maintain application stability even with failures
+
+## Code Quality Standards
+
+### Style and Formatting
+- Follow PEP 8 style guidelines
+- Use meaningful variable and function names
+- Keep functions focused and under 50 lines when possible
+- Use consistent indentation and spacing
+
+### Code Comments
+- Comment complex algorithms and business logic
+- Explain AI prompt engineering decisions
+- Document data transformation steps
+- Provide context for optimization choices
+
+## Maintenance Guidelines
+
+### Dependencies
+- Keep requirements.txt updated with version constraints
+- Test with new dependency versions before updating
+- Monitor OpenAI API changes and pricing
+- Maintain compatibility with Streamlit updates
+
+### Monitoring
+- Track API usage and costs
+- Monitor application performance
+- Log errors for debugging
+- Collect user feedback for improvements
+
+## Development Workflow
+
+### Before Making Changes
+- Understand the existing architecture and data flow
+- Test current functionality with test_*.py files
+- Consider impact on cost optimization and performance
+- Plan fallback mechanisms for new features
+
+### When Adding Features
+- Follow established patterns in existing modules
+- Implement proper error handling from the start
+- Add appropriate tests for new functionality
+- Update documentation and user guides
+
+### Code Review Checklist
+- [ ] Follows established architecture patterns
+- [ ] Implements proper error handling
+- [ ] Includes appropriate tests
+- [ ] Maintains cost optimization
+- [ ] Updates documentation
+- [ ] Provides user feedback
+- [ ] Handles edge cases gracefully
+
+## Specific Implementation Rules
+
+### Theme Analysis
+- Always provide confidence scores for extracted themes
+- Include evidence and chunk references
+- Implement theme deduplication and consolidation
+- Support both AI and keyword-based extraction
+
+### Relationship Analysis
+- Calculate multiple correlation metrics
+- Provide relationship strength classification
+- Include co-occurrence counts
+- Support network analysis metrics
+
+### Visualization
+- Use Plotly for all interactive charts
+- Provide hover information with details
+- Scale visualizations appropriately
+- Include summary statistics and metrics
+
+Remember: This project prioritizes cost-effective AI analysis with robust fallback mechanisms, comprehensive error handling, and excellent user experience through clear feedback and interactive visualizations.
