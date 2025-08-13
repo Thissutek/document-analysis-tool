@@ -27,7 +27,7 @@ This tool helps researchers analyze documents by:
 1. **Clone or download the project**
    ```bash
    git clone <your-repo-url>
-   cd document-theme-analyzer
+   cd document-theme-analysis-tool
    ```
 
 2. **Create a virtual environment**
@@ -44,6 +44,11 @@ This tool helps researchers analyze documents by:
 3. **Install required packages**
    ```bash
    pip install -r requirements.txt
+   ```
+
+4. **Verify setup**
+   ```bash
+   python scripts/setup.py
    ```
 
 ## Required Dependencies
@@ -76,18 +81,36 @@ python-dotenv==1.0.0
 ## Project Structure
 
 ```
-document-theme-analyzer/
+document-theme-analysis-tool/
 ├── app.py                 # Main Streamlit application
-├── src/
-│   ├── document_parser.py # PDF text extraction
-│   ├── text_chunker.py    # Document segmentation
-│   ├── theme_analyzer.py  # AI theme extraction
-│   ├── relationship_calc.py # Theme correlation analysis
-│   └── visualizer.py      # Streamlit visualization
 ├── requirements.txt       # Python dependencies
 ├── .env                  # Environment variables (create this)
 ├── .gitignore            # Git ignore file
-└── README.md             # This file
+├── README.md             # This file
+│
+├── src/                   # Core application modules
+│   ├── document_parser.py # PDF/DOCX text extraction
+│   ├── text_chunker.py    # Token-based document segmentation
+│   ├── theme_analyzer.py  # AI theme extraction (GPT-4o-mini)
+│   ├── relationship_calc.py # Theme correlation analysis
+│   └── visualizer.py      # Interactive visualizations
+│
+├── tests/                 # Test suite
+│   ├── test_document_parser.py
+│   ├── test_chunking_pipeline.py
+│   ├── test_theme_pipeline.py
+│   └── ...
+│
+├── docs/                  # Documentation
+│   ├── README.md         # Detailed documentation
+│   ├── CLAUDE.md         # AI development context
+│   └── demo/             # Demo materials
+│       ├── demo_usage.md
+│       └── ...
+│
+└── scripts/               # Utility scripts
+    ├── setup.py          # Environment setup checker
+    └── run_tests.py      # Test runner
 ```
 
 ## Running the Application
@@ -102,6 +125,23 @@ document-theme-analyzer/
 3. **Open your browser**
    - Streamlit will automatically open http://localhost:8501
    - If it doesn't open automatically, navigate to that URL
+
+## Testing
+
+**Run all tests:**
+```bash
+python scripts/run_tests.py
+```
+
+**Run individual test:**
+```bash
+python tests/test_document_parser.py
+```
+
+**Check setup:**
+```bash
+python scripts/setup.py
+```
 
 ## Usage
 
