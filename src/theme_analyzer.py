@@ -396,3 +396,116 @@ Text to analyze:
             theme['relative_frequency'] = theme['chunk_frequency'] / len(chunks) if chunks else 0
         
         return themes
+    
+    def calculate_theme_relevance_scores(self, themes: List[Dict], research_topics: List[str], 
+                                       research_questions: List[str] = None) -> List[Dict]:
+        """
+        Calculate relevance scores for themes based on user's research topics and questions
+        
+        Args:
+            themes: List of extracted themes
+            research_topics: List of user-provided research topics
+            research_questions: List of user-provided research questions
+            
+        Returns:
+            List[Dict]: Themes with calculated relevance scores
+        """
+        if not research_topics and not research_questions:
+            # If no user inputs, use default scores
+            for theme in themes:
+                theme['relevance_score'] = 5.0  # Default middle score
+            return themes
+        
+        # Combine all user inputs for analysis
+        all_user_inputs = research_topics.copy() if research_topics else []
+        if research_questions:
+            all_user_inputs.extend(research_questions)
+        
+        for theme in themes:
+            theme_name = theme['name'].lower()
+            theme_description = theme.get('description', '').lower()
+            theme_evidence = ' '.join([e.lower() for e in theme.get('evidence', [])])
+            
+            # Calculate relevance based on multiple factors
+            relevance_scores = []
+            
+            # 1. Direct topic matching
+            topic_matches = 0
+            for topic in research_topics:
+                topic_words = [word.lower() for word in topic.split() if len(word) > 2]
+                # Check if any topic words appear in theme name, description, or evidence
+                for word in topic_words:
+                    if (word in theme_name or 
+                        word in theme_description or 
+                        word in theme_evidence):
+                        topic_matches += 1
+                        break  # Count each topic only once
+            
+            topic_relevance = topic_matches / len(research_topics) if research_topics else 0
+            relevance_scores.append(topic_relevance * 10)  # Scale to 0-10
+            
+            # 2. Question relevance (if questions provided)
+            if research_questions:
+                question_matches = 0
+                for question in research_questions:
+                    question_words = [word.lower() for word in question.split() if len(word) > 2]
+                    # Check if question words appear in theme
+                    for word in question_words:
+                        if (word in theme_name or 
+                            word in theme_description or 
+                            word in theme_evidence):
+                            question_matches += 1
+                            break
+                
+                question_relevance = question_matches / len(research_questions)
+                relevance_scores.append(question_relevance * 10)
+            
+            # 3. Semantic similarity using embeddings (if available)
+            if self.has_api_key and all_user_inputs:
+                try:
+                    # Get embeddings for theme and user inputs
+                    theme_text = f"{theme_name} {theme_description}"
+                    combined_inputs = " ".join(all_user_inputs)
+                    
+                    embeddings = self.get_embeddings([theme_text, combined_inputs])
+                    if len(embeddings) == 2:
+                        # Calculate cosine similarity
+                        theme_embedding = np.array(embeddings[0])
+                        inputs_embedding = np.array(embeddings[1])
+                        
+                        similarity = np.dot(theme_embedding, inputs_embedding) / (
+                            np.linalg.norm(theme_embedding) * np.linalg.norm(inputs_embedding)
+                        )
+                        
+                        # Scale similarity to 0-10 range
+                        semantic_relevance = max(0, similarity * 10)
+                        relevance_scores.append(semantic_relevance)
+                except Exception as e:
+                    # If embedding fails, continue without it
+                    pass
+            
+            # 4. Confidence score from theme extraction
+            confidence_score = theme.get('confidence', 0.5) * 10  # Scale to 0-10
+            relevance_scores.append(confidence_score)
+            
+            # Calculate weighted average relevance score
+            if len(relevance_scores) > 0:
+                # Weight topic matching more heavily
+                weights = [0.4, 0.3, 0.2, 0.1]  # Adjust based on number of scores
+                if len(relevance_scores) == 1:
+                    weights = [1.0]
+                elif len(relevance_scores) == 2:
+                    weights = [0.6, 0.4]
+                elif len(relevance_scores) == 3:
+                    weights = [0.5, 0.3, 0.2]
+                
+                # Ensure weights sum to 1
+                weights = weights[:len(relevance_scores)]
+                weights = [w / sum(weights) for w in weights]
+                
+                final_relevance = sum(score * weight for score, weight in zip(relevance_scores, weights))
+                theme['relevance_score'] = min(10.0, max(0.0, final_relevance))
+            else:
+                theme['relevance_score'] = 5.0  # Default score
+        
+        return themes

@@ -15,13 +15,17 @@ class RelationshipCalculator:
     def __init__(self):
         pass
     
-    def calculate_theme_relationships(self, themes: List[Dict], all_chunks: List[Dict]) -> Dict[str, any]:
+    def calculate_theme_relationships(self, themes: List[Dict], all_chunks: List[Dict], 
+                                    research_topics: List[str] = None, 
+                                    research_questions: List[str] = None) -> Dict[str, any]:
         """
         Calculate comprehensive relationships between themes
         
         Args:
             themes: List of extracted themes with chunk_ids
             all_chunks: All document chunks for context
+            research_topics: List of user-provided research topics
+            research_questions: List of user-provided research questions
             
         Returns:
             Dict: Complete relationship analysis including co-occurrence, correlations, and metrics
@@ -40,11 +44,10 @@ class RelationshipCalculator:
         # Step 3: Calculate theme centrality and importance
         theme_metrics = self.calculate_theme_metrics(themes, correlations)
         
-        # Step 4: Calculate research focus relationships
-        research_relationships = {}
-        for theme in themes:
-            # Use confidence as research relationship strength
-            research_relationships[theme['name']] = theme.get('confidence', 0.5)
+        # Step 4: Calculate research focus relationships based on user inputs
+        research_relationships = self.measure_research_focus_relationship(
+            themes, research_topics, research_questions
+        )
         
         return {
             'cooccurrence': cooccurrence,
@@ -174,13 +177,15 @@ class RelationshipCalculator:
         
         return theme_metrics
     
-    def measure_research_focus_relationship(self, themes: List[Dict], research_theme: str) -> Dict[str, float]:
+    def measure_research_focus_relationship(self, themes: List[Dict], research_topics: List[str] = None, 
+                                          research_questions: List[str] = None) -> Dict[str, float]:
         """
-        Measure how closely each theme relates to the main research focus
+        Measure how closely each theme relates to the user's research topics and questions
         
         Args:
             themes: List of extracted themes
-            research_theme: Original research theme/focus
+            research_topics: List of user-provided research topics
+            research_questions: List of user-provided research questions
             
         Returns:
             Dict: Research focus relationship scores for each theme
@@ -188,11 +193,11 @@ class RelationshipCalculator:
         research_relationships = {}
         
         for theme in themes:
-            # Use existing relevance score or calculate based on theme description
+            # Use the relevance score that was calculated based on user inputs
             relevance = theme.get('relevance_score', 5.0)
             
-            # Normalize to 0-1 scale
-            normalized_relevance = relevance / 10.0 if relevance <= 10 else relevance
+            # Normalize to 0-1 scale (relevance_score is already 0-10)
+            normalized_relevance = relevance / 10.0
             
             research_relationships[theme['name']] = normalized_relevance
         

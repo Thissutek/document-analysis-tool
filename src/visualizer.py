@@ -192,18 +192,54 @@ class Visualizer:
                 value=f"{avg_relevance:.2f}"
             )
     
-    def display_detailed_themes(self, themes: List[Dict]):
+    def display_detailed_themes(self, themes: List[Dict], research_topics: List[str] = None, 
+                               research_questions: List[str] = None):
         """
         Display detailed theme information in expandable sections
         
         Args:
             themes: List of theme dictionaries
+            research_topics: List of user-provided research topics
+            research_questions: List of user-provided research questions
         """
         if not themes:
             st.info("No themes extracted from the document")
             return
         
-        st.subheader("Detailed Theme Analysis")
+        st.subheader("🎯 Detailed Theme Analysis")
+        
+        # Show relevance calculation explanation
+        if research_topics or research_questions:
+            with st.expander("ℹ️ How relevance scores are calculated", expanded=False):
+                st.markdown("""
+                **Relevance scores (0-10) are calculated based on:**
+                - **Topic Matching**: How well the theme matches your research topics
+                - **Question Alignment**: How closely the theme addresses your research questions  
+                - **Semantic Similarity**: AI-powered similarity to your research focus
+                - **Confidence**: How confident the AI is about the theme extraction
+                
+                **Higher scores** = More relevant to your specific research interests
+                **Lower scores** = Less directly related to your research focus
+                """)
+                
+                if research_topics:
+                    st.write("**Your Research Topics:**")
+                    for topic in research_topics:
+                        st.write(f"• {topic}")
+                
+                if research_questions:
+                    st.write("**Your Research Questions:**")
+                    for question in research_questions:
+                        st.write(f"• {question}")
+        
+        st.markdown("""
+        **What you'll find in each theme:**
+        - **Description**: AI-generated explanation of what this theme represents
+        - **Relevance Score**: How closely this theme relates to your research topic (0-10 scale)
+        - **Frequency**: How many document chunks contain this theme
+        - **Relative Frequency**: Percentage of total chunks containing this theme
+        - **Key Phrases**: Supporting evidence and important terms found in the document
+        """)
         
         for i, theme in enumerate(themes):
             with st.expander(f"🎯 {theme['name']}"):
@@ -211,7 +247,17 @@ class Visualizer:
                 
                 with col1:
                     st.write(f"**Description:** {theme.get('description', 'No description available')}")
-                    st.write(f"**Relevance Score:** {theme.get('relevance_score', 'N/A')}/10")
+                    
+                    # Show relevance score with color coding
+                    relevance_score = theme.get('relevance_score', 0)
+                    if relevance_score >= 7:
+                        relevance_color = "🟢"
+                    elif relevance_score >= 4:
+                        relevance_color = "🟡"
+                    else:
+                        relevance_color = "🔴"
+                    
+                    st.write(f"**Relevance Score:** {relevance_color} {relevance_score:.1f}/10")
                 
                 with col2:
                     st.write(f"**Frequency:** {theme.get('chunk_frequency', 0)} chunks")
