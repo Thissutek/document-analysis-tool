@@ -177,7 +177,7 @@ class ThemeAnalyzer:
     
     def extract_themes_from_chunks(self, relevant_chunks: List[Dict], research_topics: List[str], max_themes: int = 15) -> List[Dict[str, any]]:
         """
-        Extract themes from relevant chunks using GPT-4o-mini
+        Extract themes from relevant chunks using enhanced GPT-4o-mini prompting
         
         Args:
             relevant_chunks: List of filtered relevant chunks
@@ -195,72 +195,307 @@ class ThemeAnalyzer:
             return self._fallback_theme_extraction(relevant_chunks, research_topics, max_themes)
         
         try:
-            # Theme extraction in progress - status handled by main app
+            # Stage 1: Enhanced initial theme extraction
+            initial_themes = self._enhanced_theme_extraction(relevant_chunks, research_topics, max_themes)
             
-            # Process chunks in smaller batches for better theme extraction
-            all_themes = []
-            batch_size = 5  # Smaller batches for more focused analysis
+            # Stage 2: Validation and refinement
+            if initial_themes:
+                validated_themes = self._validate_and_refine_themes(initial_themes, relevant_chunks, research_topics)
+                return validated_themes
+            else:
+                return initial_themes
             
-            combined_topics = ", ".join(research_topics)
+        except Exception as e:
+            st.warning(f"Enhanced GPT theme extraction failed: {str(e)}. Using fallback method.")
+            return self._fallback_theme_extraction(relevant_chunks, research_topics, max_themes)
+    
+    def _enhanced_theme_extraction(self, relevant_chunks: List[Dict], research_topics: List[str], max_themes: int) -> List[Dict]:
+        """Stage 1: Enhanced theme extraction with improved prompting"""
+        all_themes = []
+        batch_size = 4  # Smaller batches for more focused analysis
+        
+        combined_topics = ", ".join(research_topics)
+        themes_per_batch = max(2, max_themes // max(1, len(relevant_chunks) // batch_size))
+        
+        for i in range(0, min(len(relevant_chunks), 16), batch_size):  # Focus on most relevant chunks
+            batch_chunks = relevant_chunks[i:i + batch_size]
+            batch_text = self._prepare_context_text(batch_chunks)
             
-            for i in range(0, min(len(relevant_chunks), 20), batch_size):  # Limit to first 20 chunks
-                batch_chunks = relevant_chunks[i:i + batch_size]
-                batch_text = "\n\n---CHUNK BREAK---\n\n".join([f"Chunk {chunk['id']}: {chunk['text']}" for chunk in batch_chunks])
-                
-                # Create focused prompt for theme extraction
-                prompt = f"""
-Analyze the following text chunks and extract distinct themes related to these research topics: {combined_topics}
+            # Enhanced prompt with specific instructions
+            prompt = f"""
+You are a senior qualitative researcher conducting thematic analysis on research data.
 
-For each theme you identify, provide:
-1. A clear, specific theme name (2-5 words)
-2. A brief description (1 sentence)
-3. Evidence from the text (key phrases or quotes)
-4. Which chunks contain this theme (by chunk ID)
+RESEARCH CONTEXT:
+- Primary research focus: {combined_topics}
+- Document type: Academic/business analysis
+- Analysis goal: Identify actionable, specific themes
 
-Focus on finding {max_themes//3} distinct themes from this batch.
-Return ONLY a valid JSON array with this structure:
+TASK: Extract {themes_per_batch} DISTINCT, SPECIFIC themes from the provided text chunks.
+
+CRITICAL REQUIREMENTS:
+1. SPECIFICITY: Avoid generic themes. Instead of "communication," use "cross-team communication barriers"
+2. EVIDENCE-BASED: Each theme MUST be supported by concrete text evidence
+3. ACTIONABILITY: Themes should be specific enough to guide decision-making
+4. RELIABILITY: Each theme should appear across multiple chunks when possible
+5. RESEARCH ALIGNMENT: Themes must relate to the research focus: {combined_topics}
+
+QUALITY STANDARDS:
+- Theme names: 2-6 words, descriptive and specific
+- Evidence: Direct quotes or specific phrases from the text
+- Confidence: Base on evidence strength and chunk support (0.3-1.0)
+
+OUTPUT FORMAT: Valid JSON array only
 [
   {{
-    "name": "Theme Name",
-    "description": "Brief description of the theme",
-    "evidence": ["key phrase 1", "key phrase 2"],
-    "chunk_ids": [1, 3, 5],
-    "confidence": 0.85
+    "name": "Specific Theme Name",
+    "description": "One clear sentence explaining this theme's significance to your research",
+    "evidence": ["direct quote from text", "specific phrase showing this theme"],
+    "chunk_ids": [1, 3],
+    "confidence": 0.85,
+    "justification": "Why this theme is important and well-supported"
   }}
 ]
 
-Text to analyze:
-{batch_text[:3000]}
+TEXT TO ANALYZE:
+{batch_text}
 """
-                
-                response = self.client.chat.completions.create(
-                    model="gpt-4o-mini",
-                    messages=[
-                        {"role": "system", "content": "You are an expert researcher who extracts themes from academic and business texts. Always respond with valid JSON."},
-                        {"role": "user", "content": prompt}
-                    ],
-                    temperature=0.2,
-                    max_tokens=800
-                )
-                
-                # Parse JSON response
-                try:
-                    batch_themes = self._parse_theme_response(response.choices[0].message.content, batch_chunks)
-                    all_themes.extend(batch_themes)
-                except Exception as e:
-                    st.warning(f"Failed to parse themes from batch {i//batch_size + 1}: {e}")
-                
-                # Progress tracking handled by main app
             
-            # Deduplicate and consolidate themes
-            consolidated_themes = self._consolidate_themes(all_themes, max_themes)
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system", 
+                        "content": """You are an expert qualitative researcher specializing in thematic analysis. 
+Your expertise includes:
+- Identifying specific, actionable themes from complex texts
+- Distinguishing between surface-level and deeper thematic patterns
+- Ensuring themes are grounded in evidence and relevant to research objectives
+- Maintaining high standards for theme quality and specificity
+
+Always respond with valid JSON only. No explanations or additional text."""
+                    },
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,  # Lower temperature for more consistent results
+                max_tokens=1200   # More tokens for detailed analysis
+            )
             
-            # Theme extraction complete - results will be displayed in main app
-            return consolidated_themes
+            # Parse JSON response
+            try:
+                batch_themes = self._parse_enhanced_theme_response(response.choices[0].message.content, batch_chunks)
+                all_themes.extend(batch_themes)
+            except Exception as e:
+                st.warning(f"Failed to parse themes from batch {i//batch_size + 1}: {e}")
+        
+        return all_themes
+    
+    def _validate_and_refine_themes(self, initial_themes: List[Dict], chunks: List[Dict], research_topics: List[str]) -> List[Dict]:
+        """Stage 2: Validation and refinement of extracted themes"""
+        if not initial_themes:
+            return initial_themes
+        
+        # Prepare themes for validation
+        themes_summary = []
+        for theme in initial_themes:
+            themes_summary.append({
+                'name': theme['name'],
+                'description': theme['description'],
+                'evidence_count': len(theme.get('evidence', [])),
+                'chunk_count': len(theme.get('chunk_ids', [])),
+                'confidence': theme.get('confidence', 0.5)
+            })
+        
+        combined_topics = ", ".join(research_topics)
+        
+        # Validation prompt
+        validation_prompt = f"""
+You are reviewing thematic analysis results for quality and relevance.
+
+ORIGINAL RESEARCH FOCUS: {combined_topics}
+
+EXTRACTED THEMES TO VALIDATE:
+{self._format_themes_for_validation(themes_summary)}
+
+VALIDATION CRITERIA:
+1. RELEVANCE: Does each theme directly relate to the research focus?
+2. SPECIFICITY: Is the theme specific enough to be actionable?
+3. EVIDENCE QUALITY: Is there sufficient evidence support?
+4. DISTINCTIVENESS: Are themes truly distinct from each other?
+5. RESEARCH VALUE: Would this theme provide valuable insights?
+
+TASKS:
+1. Identify any themes that should be MERGED (too similar)
+2. Identify any themes that should be REMOVED (insufficient evidence, irrelevant, too generic)
+3. Suggest IMPROVEMENTS to theme names or descriptions for clarity
+4. Assign final QUALITY SCORES (0.0-1.0) based on validation criteria
+
+OUTPUT FORMAT: Valid JSON only
+{{
+  "validated_themes": [
+    {{
+      "original_name": "Theme Name",
+      "action": "keep|merge|remove|improve",
+      "merge_with": "Other Theme Name", 
+      "improved_name": "Better Theme Name",
+      "improved_description": "Enhanced description", 
+      "quality_score": 0.85,
+      "reasoning": "Brief explanation of decision"
+    }}
+  ],
+  "overall_assessment": "Brief summary of theme quality and coverage"
+}}
+"""
+        
+        try:
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a senior research methodologist specializing in qualitative analysis validation. Provide only valid JSON responses."
+                    },
+                    {"role": "user", "content": validation_prompt}
+                ],
+                temperature=0.1,
+                max_tokens=1000
+            )
+            
+            # Apply validation results
+            return self._apply_validation_results(initial_themes, response.choices[0].message.content)
             
         except Exception as e:
-            st.warning(f"GPT theme extraction failed: {str(e)}. Using fallback method.")
-            return self._fallback_theme_extraction(relevant_chunks, research_topics, max_themes)
+            st.warning(f"Theme validation failed: {e}. Returning initial themes.")
+            # Apply basic consolidation as fallback
+            return self._consolidate_themes(initial_themes, len(initial_themes))
+    
+    def _prepare_context_text(self, chunks: List[Dict], max_length: int = 3500) -> str:
+        """Prepare optimized context text from chunks"""
+        context_parts = []
+        current_length = 0
+        
+        for chunk in chunks:
+            chunk_header = f"\n=== CHUNK {chunk['id']} ===\n"
+            chunk_text = chunk['text']
+            
+            # Calculate if this chunk fits
+            chunk_content = chunk_header + chunk_text + "\n"
+            
+            if current_length + len(chunk_content) <= max_length:
+                context_parts.append(chunk_content)
+                current_length += len(chunk_content)
+            else:
+                # Try to fit partial chunk
+                remaining_space = max_length - current_length - len(chunk_header) - 10
+                if remaining_space > 200:  # Only if substantial space
+                    partial_text = chunk_text[:remaining_space] + "..."
+                    context_parts.append(chunk_header + partial_text + "\n")
+                break
+        
+        return "".join(context_parts)
+    
+    def _format_themes_for_validation(self, themes: List[Dict]) -> str:
+        """Format themes for validation prompt"""
+        formatted = []
+        for i, theme in enumerate(themes, 1):
+            formatted.append(
+                f"{i}. {theme['name']}\n"
+                f"   Description: {theme['description']}\n"
+                f"   Evidence: {theme['evidence_count']} pieces\n"
+                f"   Chunks: {theme['chunk_count']}\n"
+                f"   Confidence: {theme['confidence']:.2f}\n"
+            )
+        return "\n".join(formatted)
+    
+    def _parse_enhanced_theme_response(self, response_text: str, chunks: List[Dict]) -> List[Dict]:
+        """Parse enhanced GPT response with additional fields"""
+        import json
+        import re
+        
+        try:
+            # Try to extract JSON from response
+            json_match = re.search(r'\[.*\]', response_text, re.DOTALL)
+            if json_match:
+                themes_data = json.loads(json_match.group())
+            else:
+                themes_data = json.loads(response_text)
+            
+            themes = []
+            for theme_data in themes_data:
+                if isinstance(theme_data, dict) and 'name' in theme_data:
+                    theme = {
+                        'name': theme_data.get('name', 'Unknown Theme'),
+                        'description': theme_data.get('description', 'No description available'),
+                        'evidence': theme_data.get('evidence', []),
+                        'chunk_ids': theme_data.get('chunk_ids', []),
+                        'confidence': theme_data.get('confidence', 0.5),
+                        'chunk_frequency': len(theme_data.get('chunk_ids', [])),
+                        'source': 'gpt-4o-mini-enhanced',
+                        'justification': theme_data.get('justification', ''),
+                        'extraction_method': 'enhanced_prompting'
+                    }
+                    themes.append(theme)
+            
+            return themes
+            
+        except Exception as e:
+            st.warning(f"Enhanced JSON parsing failed: {e}")
+            return []
+    
+    def _apply_validation_results(self, initial_themes: List[Dict], validation_response: str) -> List[Dict]:
+        """Apply validation results to refine themes"""
+        import json
+        import re
+        
+        try:
+            # Parse validation response
+            json_match = re.search(r'\{.*\}', validation_response, re.DOTALL)
+            if json_match:
+                validation_data = json.loads(json_match.group())
+            else:
+                validation_data = json.loads(validation_response)
+            
+            validated_themes = []
+            theme_lookup = {theme['name']: theme for theme in initial_themes}
+            
+            for validation in validation_data.get('validated_themes', []):
+                original_name = validation.get('original_name')
+                action = validation.get('action', 'keep')
+                
+                if original_name in theme_lookup:
+                    theme = theme_lookup[original_name].copy()
+                    
+                    if action == 'keep':
+                        # Update quality score
+                        theme['validation_score'] = validation.get('quality_score', theme.get('confidence', 0.5))
+                        validated_themes.append(theme)
+                        
+                    elif action == 'improve':
+                        # Apply improvements
+                        if validation.get('improved_name'):
+                            theme['name'] = validation['improved_name']
+                        if validation.get('improved_description'):
+                            theme['description'] = validation['improved_description']
+                        theme['validation_score'] = validation.get('quality_score', theme.get('confidence', 0.5))
+                        theme['improvement_applied'] = True
+                        validated_themes.append(theme)
+                        
+                    elif action == 'merge':
+                        # Handle merge logic (simplified for now)
+                        theme['merge_candidate'] = validation.get('merge_with')
+                        theme['validation_score'] = validation.get('quality_score', theme.get('confidence', 0.5))
+                        validated_themes.append(theme)
+                    
+                    # action == 'remove' means don't add to validated_themes
+            
+            # Sort by validation score and return
+            validated_themes.sort(key=lambda x: x.get('validation_score', 0), reverse=True)
+            return validated_themes
+            
+        except Exception as e:
+            st.warning(f"Failed to apply validation results: {e}")
+            # Return top themes by confidence as fallback
+            initial_themes.sort(key=lambda x: x.get('confidence', 0), reverse=True)
+            return initial_themes
     
     def _parse_theme_response(self, response_text: str, chunks: List[Dict]) -> List[Dict]:
         """Parse GPT response and create theme objects"""
