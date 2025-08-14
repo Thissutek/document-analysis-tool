@@ -232,7 +232,205 @@ def create_coverage_chart(topic_coverage):
     fig.update_layout(height=400)
     return fig
 
-def create_pyvis_network(extracted_themes, relationship_analysis):
+def create_interactive_chord_diagram(extracted_themes, relationship_analysis):
+    """Create an interactive chord diagram showing theme relationships"""
+    try:
+        import plotly.graph_objects as go
+        import numpy as np
+        import pandas as pd
+        from math import pi, cos, sin
+        
+        if not extracted_themes:
+            return None
+            
+        # Prepare theme data
+        themes = [theme['name'] for theme in extracted_themes]
+        n_themes = len(themes)
+        
+        # Create relationship matrix
+        matrix = np.zeros((n_themes, n_themes))
+        theme_to_idx = {theme: i for i, theme in enumerate(themes)}
+        
+        # Fill matrix with relationship strengths
+        if relationship_analysis and 'theme_relationships' in relationship_analysis:
+            for rel in relationship_analysis['theme_relationships']:
+                theme1 = rel.get('theme1', '')
+                theme2 = rel.get('theme2', '')
+                strength = rel.get('strength', 0)
+                
+                if theme1 in theme_to_idx and theme2 in theme_to_idx:
+                    i, j = theme_to_idx[theme1], theme_to_idx[theme2]
+                    matrix[i][j] = strength
+                    matrix[j][i] = strength  # Symmetric
+        
+        # If no relationships, create based on co-occurrence
+        if matrix.sum() == 0:
+            for i, theme1 in enumerate(extracted_themes):
+                for j, theme2 in enumerate(extracted_themes):
+                    if i != j:
+                        chunk_ids1 = set(theme1.get('chunk_ids', []))
+                        chunk_ids2 = set(theme2.get('chunk_ids', []))
+                        if chunk_ids1 and chunk_ids2:
+                            overlap = len(chunk_ids1.intersection(chunk_ids2))
+                            total = len(chunk_ids1.union(chunk_ids2))
+                            strength = overlap / total if total > 0 else 0
+                            matrix[i][j] = strength
+        
+        # Create chord diagram using Plotly
+        # Calculate positions around circle
+        angles = [2 * pi * i / n_themes for i in range(n_themes)]
+        
+        # Node positions
+        radius = 1
+        x_nodes = [radius * cos(angle) for angle in angles]
+        y_nodes = [radius * sin(angle) for angle in angles]
+        
+        # Create traces for connections (chords)
+        edge_traces = []
+        for i in range(n_themes):
+            for j in range(i + 1, n_themes):
+                strength = matrix[i][j]
+                if strength > 0.1:  # Only show meaningful connections
+                    # Create curved connection
+                    x0, y0 = x_nodes[i], y_nodes[i]
+                    x1, y1 = x_nodes[j], y_nodes[j]
+                    
+                    # Control points for curved line
+                    mid_x, mid_y = (x0 + x1) / 2, (y0 + y1) / 2
+                    control_factor = 0.3 * strength  # Curve based on strength
+                    ctrl_x = mid_x * (1 - control_factor)
+                    ctrl_y = mid_y * (1 - control_factor)
+                    
+                    # Create smooth curve with multiple points
+                    t_values = np.linspace(0, 1, 20)
+                    curve_x = []
+                    curve_y = []
+                    
+                    for t in t_values:
+                        # Quadratic Bezier curve
+                        x = (1-t)**2 * x0 + 2*(1-t)*t * ctrl_x + t**2 * x1
+                        y = (1-t)**2 * y0 + 2*(1-t)*t * ctrl_y + t**2 * y1
+                        curve_x.append(x)
+                        curve_y.append(y)
+                    
+                    # Color and width based on strength
+                    if strength > 0.7:
+                        color = 'rgba(0, 255, 136, 0.8)'  # Green
+                        width = 8
+                    elif strength > 0.4:
+                        color = 'rgba(255, 170, 0, 0.6)'   # Orange
+                        width = 5
+                    else:
+                        color = 'rgba(136, 170, 255, 0.4)' # Blue
+                        width = 3
+                    
+                    edge_trace = go.Scatter(
+                        x=curve_x, y=curve_y,
+                        mode='lines',
+                        line=dict(width=width, color=color),
+                        hoverinfo='text',
+                        text=f'{themes[i]} ↔ {themes[j]}<br>Strength: {strength:.3f}',
+                        showlegend=False
+                    )
+                    edge_traces.append(edge_trace)
+        
+        # Create node trace
+        node_colors = []
+        node_sizes = []
+        hover_text = []
+        
+        for i, theme in enumerate(extracted_themes):
+            confidence = theme.get('confidence', 0)
+            frequency = theme.get('chunk_frequency', 1)
+            
+            # Color based on confidence
+            if confidence > 0.7:
+                color = '#10b981'  # Green
+            elif confidence > 0.4:
+                color = '#f59e0b'  # Amber
+            else:
+                color = '#ef4444'  # Red
+                
+            node_colors.append(color)
+            node_sizes.append(max(20, min(60, frequency * 8 + confidence * 30)))
+            
+            # Count connections
+            connections = sum(1 for j in range(n_themes) if matrix[i][j] > 0.1 and i != j)
+            
+            hover_text.append(
+                f"<b>{theme['name']}</b><br>"
+                f"Confidence: {confidence:.2f}<br>"
+                f"Frequency: {frequency}<br>"
+                f"Connections: {connections}<br>"
+                f"Description: {theme.get('description', 'N/A')[:100]}..."
+            )
+        
+        node_trace = go.Scatter(
+            x=x_nodes, y=y_nodes,
+            mode='markers+text',
+            marker=dict(
+                size=node_sizes,
+                color=node_colors,
+                line=dict(width=3, color='white'),
+                opacity=0.9
+            ),
+            text=[theme[:15] + '...' if len(theme) > 15 else theme for theme in themes],
+            textposition="middle center",
+            textfont=dict(size=12, color='white'),
+            hoverinfo='text',
+            hovertext=hover_text,
+            showlegend=False
+        )
+        
+        # Create layout
+        fig = go.Figure(data=edge_traces + [node_trace])
+        
+        fig.update_layout(
+            title={
+                'text': "Theme Relationship Chord Diagram",
+                'x': 0.5,
+                'xanchor': 'center',
+                'font': {'size': 18, 'color': 'white'}
+            },
+            plot_bgcolor='#1a1a1a',
+            paper_bgcolor='#1a1a1a',
+            font=dict(color='white'),
+            showlegend=False,
+            xaxis=dict(
+                showgrid=False, 
+                zeroline=False, 
+                showticklabels=False,
+                range=[-1.5, 1.5]
+            ),
+            yaxis=dict(
+                showgrid=False, 
+                zeroline=False, 
+                showticklabels=False,
+                range=[-1.5, 1.5],
+                scaleanchor="x",
+                scaleratio=1
+            ),
+            height=700,
+            margin=dict(l=50, r=50, t=60, b=50),
+            annotations=[
+                dict(
+                    text="Hover over themes and connections for details<br>Node size = importance • Colors = confidence",
+                    showarrow=False,
+                    xref="paper", yref="paper",
+                    x=0.5, y=-0.1,
+                    xanchor='center', yanchor='top',
+                    font=dict(size=12, color="gray")
+                )
+            ]
+        )
+        
+        return fig
+        
+    except Exception as e:
+        print(f"Error creating chord diagram: {e}")
+        return None
+
+def create_pyvis_network(extracted_themes, relationship_analysis, layout_style="Spread Out (Recommended)"):
     """Create interactive PyVis network visualization"""
     try:
         from pyvis.network import Network
@@ -285,7 +483,7 @@ def create_pyvis_network(extracted_themes, relationship_analysis):
                         "weight": weight
                     })
         
-        # If no explicit relationships, create based on co-occurrence
+        # Create relationships with lower threshold to show more connections
         if not relationships:
             for i, theme1 in enumerate(extracted_themes):
                 for j, theme2 in enumerate(extracted_themes[i+1:], i+1):
@@ -304,16 +502,57 @@ def create_pyvis_network(extracted_themes, relationship_analysis):
                     else:
                         theme2_chunks = set()
                     
+                    # Calculate different types of relationships
+                    weight = 0
+                    
                     if theme1_chunks and theme2_chunks:
+                        # Co-occurrence relationship
                         overlap = len(theme1_chunks.intersection(theme2_chunks))
                         total = len(theme1_chunks.union(theme2_chunks))
-                        weight = overlap / total if total > 0 else 0
-                        
-                        if weight > 0.15:  # Meaningful co-occurrence
+                        co_occurrence = overlap / total if total > 0 else 0
+                        weight = max(weight, co_occurrence)
+                    
+                    # Semantic similarity based on theme names
+                    name1_words = set(theme1['name'].lower().split())
+                    name2_words = set(theme2['name'].lower().split())
+                    if name1_words and name2_words:
+                        semantic_sim = len(name1_words.intersection(name2_words)) / len(name1_words.union(name2_words))
+                        weight = max(weight, semantic_sim * 0.7)  # Weight semantic similarity less
+                    
+                    # Confidence-based weak connection (helps spread isolated high-confidence themes)
+                    conf1 = theme1.get('confidence', 0)
+                    conf2 = theme2.get('confidence', 0)
+                    if conf1 > 0.7 and conf2 > 0.7:
+                        weight = max(weight, 0.1)  # Weak connection between high-confidence themes
+                    
+                    # Add relationship if above minimum threshold (lowered from 0.15 to 0.08)
+                    if weight > 0.08:
+                        relationships.append({
+                            "source": theme1['name'],
+                            "target": theme2['name'],
+                            "weight": weight
+                        })
+        
+        # If still very few relationships, create a central "hub" approach
+        if len(relationships) < len(extracted_themes) * 0.3:
+            # Find the theme with highest confidence to act as a hub
+            hub_theme = max(extracted_themes, key=lambda x: x.get('confidence', 0), default=None)
+            if hub_theme:
+                hub_name = hub_theme['name']
+                for theme in extracted_themes:
+                    theme_name = theme['name']
+                    if theme_name != hub_name:
+                        # Create weak connections from hub to prevent isolated nodes
+                        existing_connection = any(
+                            (rel['source'] == hub_name and rel['target'] == theme_name) or 
+                            (rel['source'] == theme_name and rel['target'] == hub_name) 
+                            for rel in relationships
+                        )
+                        if not existing_connection:
                             relationships.append({
-                                "source": theme1['name'],
-                                "target": theme2['name'],
-                                "weight": weight
+                                "source": hub_name,
+                                "target": theme_name,
+                                "weight": 0.05  # Very weak connection just for layout
                             })
         
         # Create PyVis network with modern dark theme
@@ -325,77 +564,167 @@ def create_pyvis_network(extracted_themes, relationship_analysis):
             directed=False
         )
         
-        # Use Barnes-Hut physics for better performance and layout
-        net.barnes_hut()
+        # Configure physics based on layout style
+        if layout_style == "Spread Out (Recommended)":
+            physics_config = """
+            "layout": {
+              "randomSeed": 42,
+              "improvedLayout": true,
+              "clusterThreshold": 200
+            },
+            "physics": {
+              "enabled": true,
+              "stabilization": {
+                "iterations": 300,
+                "updateInterval": 25
+              },
+              "forceAtlas2Based": {
+                "gravitationalConstant": -200,
+                "centralGravity": 0.001,
+                "springLength": 300,
+                "springConstant": 0.05,
+                "damping": 0.6,
+                "avoidOverlap": 1.5
+              },
+              "maxVelocity": 30,
+              "minVelocity": 0.5,
+              "solver": "forceAtlas2Based"
+            },"""
+        elif layout_style == "Clustered":
+            physics_config = """
+            "layout": {
+              "randomSeed": 42,
+              "improvedLayout": true,
+              "clusterThreshold": 50
+            },
+            "physics": {
+              "enabled": true,
+              "stabilization": {
+                "iterations": 150,
+                "updateInterval": 25
+              },
+              "barnesHut": {
+                "gravitationalConstant": -2000,
+                "centralGravity": 0.3,
+                "springLength": 100,
+                "springConstant": 0.1,
+                "damping": 0.3,
+                "avoidOverlap": 0.5
+              },
+              "maxVelocity": 50,
+              "minVelocity": 1,
+              "solver": "barnesHut"
+            },"""
+        else:  # Hierarchical
+            physics_config = """
+            "layout": {
+              "randomSeed": 42,
+              "improvedLayout": true,
+              "hierarchical": {
+                "enabled": true,
+                "levelSeparation": 200,
+                "nodeSpacing": 150,
+                "direction": "UD",
+                "sortMethod": "directed"
+              }
+            },
+            "physics": {
+              "enabled": true,
+              "stabilization": {
+                "iterations": 100,
+                "updateInterval": 50
+              },
+              "hierarchicalRepulsion": {
+                "centralGravity": 0.0,
+                "springLength": 100,
+                "springConstant": 0.01,
+                "nodeDistance": 120,
+                "damping": 0.09
+              },
+              "maxVelocity": 50,
+              "minVelocity": 0.75,
+              "solver": "hierarchicalRepulsion"
+            },"""
         
-        # Configure modern physics and styling
-        net.set_options("""
-        {
-          "physics": {
-            "enabled": true,
-            "stabilization": {"iterations": 150},
-            "barnesHut": {
-              "gravitationalConstant": -3000,
-              "centralGravity": 0.1,
-              "springLength": 120,
-              "springConstant": 0.02,
-              "damping": 0.15,
-              "avoidOverlap": 0.2
-            }
-          },
-          "interaction": {
+        net.set_options(f"""
+        {{
+          {physics_config}
+          "interaction": {{
             "hover": true,
-            "tooltipDelay": 100,
+            "tooltipDelay": 200,
             "zoomView": true,
             "dragView": true,
             "selectConnectedEdges": false,
-            "hoverConnectedEdges": true
-          },
-          "nodes": {
-            "font": {
-              "size": 16,
-              "color": "white",
-              "face": "Inter, -apple-system, BlinkMacSystemFont, sans-serif"
-            },
-            "borderWidth": 3,
-            "borderWidthSelected": 5,
-            "shadow": {
+            "hoverConnectedEdges": true,
+            "multiselect": false,
+            "navigationButtons": true,
+            "keyboard": {{
+              "enabled": false,
+              "speed": {{
+                "x": 10,
+                "y": 10,
+                "zoom": 0.02
+              }}
+            }}
+          }},
+          "nodes": {{
+            "font": {{
+              "size": 14,
+              "color": "#ffffff",
+              "face": "Inter, -apple-system, BlinkMacSystemFont, sans-serif",
+              "strokeWidth": 2,
+              "strokeColor": "#000000"
+            }},
+            "borderWidth": 2,
+            "borderWidthSelected": 4,
+            "shadow": {{
               "enabled": true,
-              "color": "rgba(0,0,0,0.6)",
-              "size": 15,
-              "x": 3,
-              "y": 3
-            },
-            "scaling": {
-              "min": 15,
-              "max": 60
-            },
-            "chosen": {
-              "node": "function(values, id, selected, hovering) { values.shadow = true; values.shadowSize = 20; }"
-            }
-          },
-          "edges": {
-            "smooth": {
-              "enabled": true,
-              "type": "continuous",
-              "roundness": 0.5
-            },
-            "shadow": {
-              "enabled": true,
-              "color": "rgba(255,255,255,0.1)",
-              "size": 8,
+              "color": "rgba(0,0,0,0.5)",
+              "size": 10,
               "x": 2,
               "y": 2
-            },
-            "color": {
+            }},
+            "scaling": {{
+              "min": 20,
+              "max": 80,
+              "label": {{
+                "enabled": true,
+                "min": 14,
+                "max": 18
+              }}
+            }},
+            "margin": {{
+              "top": 5,
+              "right": 5,
+              "bottom": 5,
+              "left": 5
+            }},
+            "chosen": {{
+              "node": "function(values, id, selected, hovering) {{ values.borderWidth = 6; values.shadow = true; values.shadowSize = 15; }}"
+            }},
+            "shape": "dot"
+          }},
+          "edges": {{
+            "smooth": {{
+              "enabled": true,
+              "type": "dynamic",
+              "roundness": 0.3
+            }},
+            "shadow": {{
+              "enabled": false
+            }},
+            "color": {{
               "inherit": false,
-              "opacity": 0.7
-            },
-            "chosen": {
-              "edge": "function(values, id, selected, hovering) { values.opacity = 1; }"
-            }
-          }
-        }
+              "opacity": 0.6
+            }},
+            "width": 2,
+            "selectionWidth": 4,
+            "chosen": {{
+              "edge": "function(values, id, selected, hovering) {{ values.opacity = 0.9; values.width = 4; }}"
+            }},
+            "length": 200
+          }}
+        }}
         """)
         
         # First pass: Add all nodes
@@ -416,30 +745,64 @@ def create_pyvis_network(extracted_themes, relationship_analysis):
                 description=theme['description']
             )
         
-        # Add edges with modern styling
+        # Add edges with improved styling and better visual separation
         for rel in relationships:
             source = rel['source']
             target = rel['target']
             
             if source in theme_id_map and target in theme_id_map:
-                # Edge width and color based on weight
-                edge_width = max(1, rel['weight'] * 12)
+                weight = rel['weight']
                 
-                # Modern gradient colors based on relationship strength
-                if rel['weight'] > 0.7:
-                    edge_color = "#00d4aa"  # Strong - teal
-                elif rel['weight'] > 0.4:
-                    edge_color = "#fbbf24"  # Medium - amber  
+                # Improved edge width scaling
+                if weight > 0.5:
+                    edge_width = 6
+                    edge_opacity = 0.9
+                elif weight > 0.2:
+                    edge_width = 4
+                    edge_opacity = 0.7
+                elif weight > 0.1:
+                    edge_width = 2
+                    edge_opacity = 0.5
                 else:
-                    edge_color = "#64748b"  # Weak - slate
+                    edge_width = 1
+                    edge_opacity = 0.3
+                
+                # Color scheme with better contrast
+                if weight > 0.5:
+                    edge_color = "#00ff88"  # Bright green - Strong
+                    edge_style = "solid"
+                elif weight > 0.2:
+                    edge_color = "#ffaa00"  # Orange - Medium
+                    edge_style = "solid"
+                elif weight > 0.1:
+                    edge_color = "#88aaff"  # Light blue - Weak
+                    edge_style = "dashed"
+                else:
+                    edge_color = "#555555"  # Dark gray - Very weak (layout only)
+                    edge_style = "dotted"
+                
+                # Relationship type for tooltip
+                if weight < 0.1:
+                    rel_type = "Layout connection"
+                elif weight > 0.5:
+                    rel_type = "Strong relationship"
+                elif weight > 0.2:
+                    rel_type = "Moderate relationship"
+                else:
+                    rel_type = "Weak relationship"
                 
                 net.add_edge(
                     source,
                     target,
-                    value=rel['weight'],  # This affects edge thickness
-                    color=edge_color,
-                    title=f"Relationship Strength: {rel['weight']:.3f}",
-                    width=edge_width
+                    value=weight,
+                    color={
+                        "color": edge_color,
+                        "opacity": edge_opacity
+                    },
+                    width=edge_width,
+                    title=f"{rel_type}: {weight:.3f}",
+                    dashes=(edge_style == "dashed"),
+                    smooth={"type": "dynamic", "roundness": 0.2}
                 )
         
         # Add neighbor information to tooltips (like Game of Thrones example)
@@ -1577,45 +1940,7 @@ def main():
                         alignment_data = calculate_alignment_data(results['research_topics'], results['extracted_themes'])
                         topic_coverage = calculate_topic_coverage(results['research_topics'], results['extracted_themes'])
                         
-                        # Chart 1: Interactive Network Graphs
-                        st.markdown("#### Theme Relationship Network")
-                        
-                        # Network visualization choice
-                        network_type = st.radio(
-                            "Choose network visualization:",
-                            ["PyVis (Interactive)", "Plotly (Static)"],
-                            horizontal=True
-                        )
-                        
-                        if network_type == "PyVis (Interactive)":
-                            # PyVis Network
-                            pyvis_html = create_pyvis_network(results['extracted_themes'], results['relationship_analysis'])
-                            if pyvis_html and not isinstance(pyvis_html, str) or (isinstance(pyvis_html, str) and not pyvis_html.startswith("Error") and not pyvis_html.startswith("PyVis not")):
-                                import streamlit.components.v1 as components
-                                components.html(pyvis_html, height=620)
-                                st.write("**Interactive Features:** Drag nodes, zoom, hover for details, click to select. Colors indicate confidence levels.")
-                            elif isinstance(pyvis_html, str):
-                                st.error(pyvis_html)
-                                st.info("Falling back to Plotly visualization...")
-                                network_fig = create_network_visualization(results['extracted_themes'], results['relationship_analysis'])
-                                if network_fig:
-                                    st.plotly_chart(network_fig, use_container_width=True)
-                            else:
-                                st.info("PyVis network not available - insufficient relationship data. Showing Plotly version...")
-                                network_fig = create_network_visualization(results['extracted_themes'], results['relationship_analysis'])
-                                if network_fig:
-                                    st.plotly_chart(network_fig, use_container_width=True)
-                        else:
-                            # Plotly Network
-                            network_fig = create_network_visualization(results['extracted_themes'], results['relationship_analysis'])
-                            if network_fig:
-                                st.plotly_chart(network_fig, use_container_width=True)
-                                st.write("**How to read:** Nodes represent themes (size = frequency + confidence). " +
-                                       "Lines show relationships (thickness = strength). Colors indicate confidence levels.")
-                            else:
-                                st.info("Network visualization not available - insufficient relationship data")
-                        
-                        # Chart 2: Theme Confidence Distribution
+                        # Chart 1: Theme Confidence Distribution
                         st.markdown("#### Theme Confidence Distribution")
                         fig1 = create_theme_confidence_chart(theme_data)
                         st.plotly_chart(fig1, use_container_width=True)
