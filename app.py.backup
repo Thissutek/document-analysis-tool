@@ -65,49 +65,6 @@ def get_bootstrap_icon(icon_name):
     """Return Bootstrap icon HTML"""
     return f'<i class="bi bi-{icon_name} icon"></i>'
 
-def create_research_analysis_card(research_topics, topic_warnings):
-    """Create a card showing the AI's understanding of research topics"""
-    topics_html = ""
-    if research_topics:
-        topics_html = "<ul style='margin: 0; padding-left: 20px;'>"
-        for topic in research_topics[:8]:  # Show first 8 topics
-            topics_html += f"<li style='margin-bottom: 4px; color: #374151;'>{topic}</li>"
-        if len(research_topics) > 8:
-            topics_html += f"<li style='color: #6b7280; font-style: italic;'>...and {len(research_topics) - 8} more</li>"
-        topics_html += "</ul>"
-    
-    warnings_html = ""
-    if topic_warnings:
-        warnings_html = f"""
-        <div style="margin-top: 12px; padding: 8px; background: #fef3cd; border-radius: 6px; border-left: 3px solid #f59e0b;">
-            <div style="font-size: 0.9rem; color: #92400e; font-weight: 500;">
-                <i class="bi bi-exclamation-triangle" style="margin-right: 4px;"></i>
-                Processing Notes:
-            </div>
-            <div style="font-size: 0.8rem; color: #92400e; margin-top: 4px;">
-                {len(topic_warnings)} topics were adjusted during processing
-            </div>
-        </div>
-        """
-    
-    return f"""
-    <div class="metric-card" style="margin-bottom: 2rem;">
-        <div style="display: flex; align-items: center; margin-bottom: 1rem;">
-            <i class="bi bi-lightbulb icon" style="font-size: 1.2rem; color: #667eea;"></i>
-            <span style="font-weight: 600; color: #374151; font-size: 1.1rem;">AI Research Understanding</span>
-        </div>
-        <div style="color: #6b7280; margin-bottom: 12px; font-size: 0.95rem;">
-            The AI processed your input and identified these key research areas:
-        </div>
-        {topics_html}
-        <div style="margin-top: 12px; font-size: 0.9rem; color: #6b7280;">
-            <strong>{len(research_topics)}</strong> research topics • Analysis will focus on finding themes related to these areas
-        </div>
-        {warnings_html}
-    </div>
-    """
-
-
 def validate_and_format_topics(topics_list):
     """
     Validate and format research topics
@@ -339,8 +296,7 @@ def main():
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key or api_key == "your_openai_api_key_here":
         st.error("OpenAI API key not found. Please set your OPENAI_API_KEY in the .env file.")
-        st.info("1. Copy .env.template to .env\n2. Add your OpenAI API key\n3. Restart the application")
-        st.stop()
+        st.info("1. Copy .env.template to .env\n2. Add your OpenAI API key\n3. Restart the application")        st.stop()
     
     # Sidebar for inputs
     with st.sidebar:
@@ -363,7 +319,9 @@ def main():
         st.write("**Custom Topics:**")
         custom_topics_text = st.text_area(
             "Enter your specific topics (one per line)",
-            placeholder="Example:\nEmployee motivation\nWorkplace productivity\nTeam collaboration\nRemote work challenges",            height=120,
+            placeholder="Example:
+Employee motivation\nWorkplace productivity\nTeam collaboration\nRemote work challenges",
+            height=120,
             help="Enter each topic or theme on a separate line"
         )
         
@@ -371,7 +329,10 @@ def main():
         st.write("**Research Questions:**")
         research_questions = st.text_area(
             "What specific questions do you want answered?",
-            placeholder="Example:\nHow does leadership style affect team performance?\nWhat factors contribute to employee satisfaction?\nWhat are the main barriers to innovation?",            help="Enter specific questions you want the analysis to address"
+            placeholder="Example:
+How does leadership style affect team performance?\nWhat factors contribute to employee satisfaction?\nWhat are the main barriers to innovation?",
+            height=100,
+            help="Enter specific questions you want the analysis to address"
         )
         
         # Combine all inputs
@@ -379,12 +340,14 @@ def main():
         
         # Add custom topics
         if custom_topics_text.strip():
-            custom_list = [topic.strip() for topic in custom_topics_text.split('\n') if topic.strip()]
+            custom_list = [topic.strip() for topic in custom_topics_text.split('
+                    ') if topic.strip()]
             raw_topics.extend(custom_list)
         
         # Add research questions as topics
         if research_questions.strip():
-            questions_list = [q.strip() for q in research_questions.split('\n') if q.strip()]
+            questions_list = [q.strip() for q in research_questions.split('
+                    ') if q.strip()]
             raw_topics.extend(questions_list)
         
         # Validate and format topics
@@ -531,7 +494,6 @@ def main():
                 'relationship_analysis': relationship_analysis,
                 'viz_data': viz_data,
                 'research_topics': all_topics,
-                'topic_warnings': topic_warnings,
                 'document_name': uploaded_file.name
             }
             
@@ -546,7 +508,6 @@ def main():
         # Analysis Summary Header
         st.markdown("---")
         st.markdown(f"## {get_bootstrap_icon('graph-up')} Analysis Results", unsafe_allow_html=True)
-        
         
         # Summary metrics in modern cards
         col1, col2, col3, col4 = st.columns(4)
@@ -661,91 +622,25 @@ def main():
                                 st.write("**Found in chunks:**")
                                 st.write(", ".join([f"Chunk {cid}" for cid in chunk_ids[:5]]))
                 
-                # Research Topics Analysis
-                st.markdown("---")
+                # Research Topics vs Themes Summary
                 st.markdown(f"### {get_bootstrap_icon('search')} Research Topics Analysis", unsafe_allow_html=True)
-                st.write("Your input research topics and questions, and how they relate to the extracted themes:")
-                
-                # Display research topics/questions
-                if results['research_topics']:
-                    for i, topic in enumerate(results['research_topics']):
-                        is_question = "?" in topic
-                        icon = "question-circle" if is_question else "tag"
-                        topic_type = "Research Question" if is_question else "Research Topic"
+                topic_cols = st.columns(min(3, len(results['research_topics'])))
+                for i, topic in enumerate(results['research_topics']):
+                    with topic_cols[i % len(topic_cols)]:
+                        st.write(f"**{i+1}. {topic}**")
                         
-                        with st.expander(f"**{topic_type} {i+1}:** {topic}"):
-                            # Find themes related to this topic
-                            related_themes = []
-                            topic_lower = topic.lower()
-                            
-                            for theme in results['extracted_themes']:
-                                theme_name = theme['name']
-                                theme_lower = theme_name.lower()
-                                
-                                # Simple alignment calculation based on word overlap
-                                topic_words = set(topic_lower.split())
-                                theme_words = set(theme_lower.split())
-                                
-                                if topic_words and theme_words:
-                                    alignment = len(topic_words.intersection(theme_words)) / len(topic_words.union(theme_words))
-                                else:
-                                    alignment = 0
-                                
-                                # Also check if topic words appear in theme description
-                                description = theme.get('description', '').lower()
-                                description_alignment = sum(1 for word in topic_words if word in description) / len(topic_words) if topic_words else 0
-                                
-                                final_alignment = max(alignment, description_alignment * 0.8)
-                                
-                                if final_alignment > 0.15:  # Lower threshold for display
-                                    related_themes.append({
-                                        'name': theme_name,
-                                        'confidence': theme.get('confidence', 0),
-                                        'alignment': final_alignment,
-                                        'description': theme.get('description', 'No description')
-                                    })
-                            
-                            # Sort by alignment score
-                            related_themes.sort(key=lambda x: x['alignment'], reverse=True)
-                            
-                            if related_themes:
-                                st.write(f"**Related themes found ({len(related_themes)}):**")
-                                for theme in related_themes[:5]:  # Show top 5 related themes
-                                    confidence_color = "🟢" if theme['confidence'] > 0.7 else "🟡" if theme['confidence'] > 0.4 else "⚪"
-                                    st.write(f"• {confidence_color} **{theme['name']}** (confidence: {theme['confidence']:.2f}, alignment: {theme['alignment']:.2f})")
-                                    st.write(f"  *{theme['description'][:100]}{'...' if len(theme['description']) > 100 else ''}*")
-                            else:
-                                st.write("*No directly related themes found for this topic.*")
-                                st.write("This could mean:")
-                                st.write("- The document doesn't contain content about this topic")
-                                st.write("- The topic needs to be more specific")
-                                st.write("- The relevance threshold is too high")
-                
-                # Analysis summary
-                st.write("---")
-                st.write(f"**Analysis Summary:**")
-                st.write(f"• **{len(results['research_topics'])}** research topics/questions provided")
-                st.write(f"• **{len(results['extracted_themes'])}** themes extracted from document")
-                
-                # Calculate how many topics had related themes
-                topics_with_themes = 0
-                for topic in results['research_topics']:
-                    topic_lower = topic.lower()
-                    has_related = False
-                    for theme in results['extracted_themes']:
-                        theme_lower = theme['name'].lower()
-                        topic_words = set(topic_lower.split())
-                        theme_words = set(theme_lower.split())
-                        if topic_words and theme_words:
-                            alignment = len(topic_words.intersection(theme_words)) / len(topic_words.union(theme_words))
-                            if alignment > 0.15:
-                                has_related = True
-                                break
-                    if has_related:
-                        topics_with_themes += 1
-                
-                coverage_rate = (topics_with_themes / len(results['research_topics'])) * 100 if results['research_topics'] else 0
-                st.write(f"• **{topics_with_themes}/{len(results['research_topics'])}** topics had related themes found ({coverage_rate:.1f}% coverage)")
+                        # Find themes related to this topic
+                        related_themes = []
+                        for theme in results['extracted_themes']:
+                            if any(word.lower() in theme['name'].lower() for word in topic.split() if len(word) > 3):
+                                related_themes.append(theme['name'])
+                        
+                        if related_themes:
+                            st.write("Related themes:")
+                            for rt in related_themes[:3]:
+                                st.write(f"• {rt}")
+                        else:
+                            st.write("No directly related themes found")
             
             # All Chunks Tab
             with tabs[1]:
@@ -794,13 +689,13 @@ def main():
                     
                     # Create clean status text for expander title (no HTML)
                     if chunk_data['has_themes']:
-                        status_text = f"Has {chunk_data['theme_count']} themes"
+                        status_text = f\"Has {chunk_data['theme_count']} themes\"
                     elif chunk_data['is_relevant']:
-                        status_text = "Relevant but no themes extracted"
+                        status_text = \"Relevant but no themes extracted\"
                     else:
-                        status_text = "Not relevant (filtered out)"
+                        status_text = \"Not relevant (filtered out)\"
                     
-                    with st.expander(f"**Chunk {chunk_id}** - {status_text} (Tokens: {chunk_data['token_count']:,})"):
+                    with st.expander(f\"**Chunk {chunk_id}** - {status_text} (Tokens: {chunk_data['token_count']:,})\"):
                         col1, col2 = st.columns([3, 1])
                         
                         with col1:
@@ -878,7 +773,8 @@ def main():
                                 theme_related_sentences = []
                                 
                                 # Split chunk into sentences
-                                sentences = chunk_text.replace(".", ".\n").replace("!", "!\n").replace("?", "?\n").split("\n")
+                                sentences = chunk_text.replace('.', '.
+').replace('!', '!\n').replace('?', '?\n').split('\n')
                                 sentences = [s.strip() for s in sentences if s.strip()]
                                 
                                 # Look for theme-related content in sentences
