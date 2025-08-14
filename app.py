@@ -1309,11 +1309,6 @@ def main():
             - Medium doc (~20 pages): **$0.008-0.015**  
             - Large doc (~100 pages): **$0.015-0.030**
             
-            **Cost Breakdown:**
-            - Embedding analysis: ~80% of cost
-            - Theme extraction: ~15% of cost  
-            - Validation: ~5% of cost
-            
             💡 *Affordable but scales with document length*
             """)
     
