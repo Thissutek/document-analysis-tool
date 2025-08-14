@@ -1,36 +1,56 @@
 # Document Theme Analysis Tool
 
-A Streamlit application that analyzes large text documents (PDFs) to identify themes and visualize their relationships through interactive bubble graphs.
+A powerful AI-driven Streamlit application that analyzes documents to extract themes and provides comprehensive insights with professional visualizations. Built for researchers, analysts, and professionals who need to quickly understand document content and identify key themes.
 
-## Overview
+## 🎯 Overview
 
-This tool helps researchers analyze documents by:
-- Extracting text from PDF documents
-- Breaking documents into manageable chunks
-- Identifying themes related to researcher's input
-- Visualizing theme relationships in interactive bubble graphs
+This tool leverages advanced AI technology to help users:
+- Extract and analyze themes from PDF documents using GPT-4o-mini
+- Filter content based on research focus using AI embeddings
+- Visualize theme relationships and patterns 
+- Calculate accurate API costs for transparency
+- Provide actionable insights for research and analysis
 
-## Features
+## ✨ Key Features
 
-- **Document Processing**: Extract clean text from PDF files
-- **Theme Analysis**: AI-powered theme extraction based on researcher input
-- **Interactive Visualization**: Bubble graphs showing theme frequency and correlations
-- **Streamlit Interface**: User-friendly web interface
+### 📄 **Document Processing**
+- **Smart PDF Extraction**: Clean text extraction from PDF files with proper formatting
+- **Token-Aware Chunking**: Intelligent document segmentation optimized for AI processing
+- **Large Document Support**: Handles documents of varying sizes efficiently
 
-## Prerequisites
+### 🧠 **AI-Powered Analysis**  
+- **Enhanced Theme Extraction**: Two-stage prompting system with validation for high-quality results
+- **Relevance Filtering**: AI embeddings to focus on content matching your research interests
+- **Confidence Scoring**: Themes include confidence metrics and evidence validation
+- **Research Alignment**: Measures how well themes align with your specific research goals
 
+### 📊 **Professional Visualizations**
+- **Theme Confidence Distribution**: Understand the reliability of extracted themes
+- **Frequency Analysis**: See which themes appear most often in your document
+- **Research Alignment Charts**: Visualize how themes relate to your research topics
+- **Topic Coverage Analysis**: Understand which research areas are well-covered
+
+### 🔧 **User-Friendly Features**
+- **Bootstrap Icons**: Clean, professional interface design
+- **API Key Management**: Secure sidebar for OpenAI API key configuration with testing
+- **Cost Transparency**: Real-time accurate cost estimation for API usage
+- **Responsive Design**: Works seamlessly across different screen sizes
+
+## 🚀 Quick Start
+
+### Prerequisites
 - Python 3.8 or higher
-- OpenAI API key
+- OpenAI API key (users provide their own - this is a free tool!)
 
-## Installation
+### Installation
 
-1. **Clone or download the project**
+1. **Clone the repository**
    ```bash
    git clone <your-repo-url>
    cd document-theme-analysis-tool
    ```
 
-2. **Create a virtual environment**
+2. **Create and activate virtual environment**
    ```bash
    python -m venv venv
    
@@ -41,189 +61,265 @@ This tool helps researchers analyze documents by:
    source venv/bin/activate
    ```
 
-3. **Install required packages**
+3. **Install dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Verify setup**
-   ```bash
-   python scripts/setup.py
-   ```
+### Running the Application
 
-## Required Dependencies
-
-Create a `requirements.txt` file with these packages:
-
-```
-streamlit==1.29.0
-PyPDF2==3.0.1
-openai==1.3.0
-pandas==2.1.0
-plotly==5.17.0
-numpy==1.25.0
-scikit-learn==1.3.0
-python-dotenv==1.0.0
-```
-
-## Environment Setup
-
-1. **Create a `.env` file in the project root:**
-   ```
-   OPENAI_API_KEY=your_openai_api_key_here
-   ```
-
-2. **Get your OpenAI API key:**
-   - Go to https://platform.openai.com/api-keys
-   - Create a new API key
-   - Copy and paste it into your `.env` file
-
-## Project Structure
-
-```
-document-theme-analysis-tool/
-├── app.py                 # Main Streamlit application
-├── requirements.txt       # Python dependencies
-├── .env                  # Environment variables (create this)
-├── .gitignore            # Git ignore file
-├── README.md             # This file
-│
-├── src/                   # Core application modules
-│   ├── document_parser.py # PDF/DOCX text extraction
-│   ├── text_chunker.py    # Token-based document segmentation
-│   ├── theme_analyzer.py  # AI theme extraction (GPT-4o-mini)
-│   ├── relationship_calc.py # Theme correlation analysis
-│   └── visualizer.py      # Interactive visualizations
-│
-├── tests/                 # Test suite
-│   ├── test_document_parser.py
-│   ├── test_chunking_pipeline.py
-│   ├── test_theme_pipeline.py
-│   └── ...
-│
-├── docs/                  # Documentation
-│   ├── README.md         # Detailed documentation
-│   ├── CLAUDE.md         # AI development context
-│   └── demo/             # Demo materials
-│       ├── demo_usage.md
-│       └── ...
-│
-└── scripts/               # Utility scripts
-    ├── setup.py          # Environment setup checker
-    └── run_tests.py      # Test runner
-```
-
-## Running the Application
-
-1. **Make sure your virtual environment is activated**
-
-2. **Start the Streamlit app**
+1. **Start the Streamlit application**
    ```bash
    streamlit run app.py
    ```
 
-3. **Open your browser**
-   - Streamlit will automatically open http://localhost:8501
-   - If it doesn't open automatically, navigate to that URL
+2. **Access the application**
+   - Open your browser to http://localhost:8501
+   - Or follow the URL provided in the terminal
 
-## Testing
+## 🔑 API Key Setup
 
-**Run all tests:**
-```bash
-python scripts/run_tests.py
+This is a **free tool** where users provide their own OpenAI API keys:
+
+### Option 1: Environment Variable (Recommended for Development)
+Create a `.env` file in the project root:
+```
+OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-**Run individual test:**
-```bash
-python tests/test_document_parser.py
+### Option 2: Sidebar Input (Recommended for Users)
+1. Open the application
+2. Use the sidebar "🔑 API Configuration" section
+3. Enter your OpenAI API key
+4. Test the connection using the "Test API Key" button
+
+### Getting an OpenAI API Key
+1. Visit [OpenAI Platform](https://platform.openai.com/api-keys)
+2. Create an account or sign in
+3. Generate a new API key
+4. Copy the key (starts with 'sk-')
+
+## 💡 How to Use
+
+1. **Configure API Access**
+   - Enter your OpenAI API key in the sidebar
+   - Test the connection to ensure it's working
+
+2. **Upload Document**
+   - Use the file uploader to select a PDF document
+   - Wait for the text extraction to complete
+
+3. **Define Research Focus**
+   - Enter your research topics (comma-separated)
+   - Add research questions (optional, one per line)
+   - Adjust relevance threshold if needed
+
+4. **Analyze Document**
+   - Click "Analyze Document" to start processing
+   - Monitor progress through the status indicators
+   - Review real-time cost estimates
+
+5. **Explore Results**
+   - **Main Dashboard**: Overview of extracted themes with key metrics
+   - **Detailed Analysis**: Deep dive into theme evidence and confidence scores
+   - **Visualizations**: Interactive charts showing theme patterns and relationships
+
+## 🏗️ Technical Architecture
+
+### Project Structure
+```
+document-theme-analysis-tool/
+├── app.py                      # Main Streamlit application with API key management
+├── requirements.txt            # Python dependencies
+├── .env                       # Environment variables (optional)
+├── README.md                  # This documentation
+│
+├── src/                       # Core application modules
+│   ├── theme_analyzer.py      # AI theme extraction with enhanced prompting
+│   ├── text_chunker.py        # Token-based document segmentation  
+│   ├── relationship_calc.py   # Theme correlation and relationship analysis
+│   │
+│   ├── ui/                    # User interface components
+│   │   └── ui_components.py   # Bootstrap-styled UI elements
+│   │
+│   ├── visualization/         # Chart and visualization generators
+│   │   └── chart_generators.py # Plotly-based professional charts
+│   │
+│   └── analysis/              # Analysis and insight generation
+│       └── analysis_helpers.py # Statistical analysis and insights
 ```
 
-**Check setup:**
-```bash
-python scripts/setup.py
-```
+### Core Technologies
+- **Streamlit**: Web application framework
+- **OpenAI GPT-4o-mini**: Enhanced theme extraction with validation
+- **OpenAI Embeddings**: text-embedding-ada-002 for relevance filtering
+- **Plotly**: Interactive professional visualizations
+- **Bootstrap Icons**: Clean, professional UI design
+- **tiktoken**: Accurate token counting for cost calculation
 
-## Usage
+## 🔬 AI Processing Pipeline
 
-1. **Upload a PDF document** using the file uploader
-2. **Enter your research theme** (keywords, phrases, or questions)
-3. **Click "Analyze Document"** to start processing
-4. **View results** in the interactive bubble graph:
-   - Bubble size = theme frequency
-   - Bubble connections = theme correlations
-   - Hover for details
+### 1. Document Preparation
+- PDF text extraction and cleaning
+- Token-based chunking (1000 tokens per chunk, 100 token overlap)
+- Chunk metadata and position tracking
 
-## Implementation Steps
+### 2. Relevance Filtering
+- AI embeddings comparison between chunks and research topics
+- Cosine similarity scoring with configurable threshold
+- Reduces API costs by processing only relevant content
 
-Follow these steps to build the application:
+### 3. Enhanced Theme Extraction
+- **Stage 1**: Initial extraction with detailed prompting for specificity
+- **Stage 2**: Validation and refinement for quality assurance
+- Evidence collection with chunk references
+- Confidence scoring and justification
 
-### Step 1: Document Input Processing
-- [ ] Set up PDF parsing with PyPDF2
-- [ ] Create text extraction function
-- [ ] Add text cleaning and formatting
+### 4. Analysis & Insights
+- Theme frequency and distribution analysis
+- Research alignment scoring
+- Relationship and correlation analysis
+- Statistical insights and recommendations
 
-### Step 2: Theme Input Processing  
-- [ ] Create input validation
-- [ ] Add text normalization
-- [ ] Prepare theme for analysis
+## 💰 Cost Transparency
 
-### Step 3: Simple Text Chunking
-- [ ] Implement fixed-size chunking with for loop
-- [ ] Add position tracking
-- [ ] Create chunk array structure
+### Typical Costs (per document)
+- **Small documents** (5-20 pages): $0.10 - $0.50
+- **Medium documents** (20-50 pages): $0.50 - $1.50  
+- **Large documents** (50+ pages): $1.50 - $5.00
 
-### Step 4: Combined Relevance Filtering + Theme Extraction
-- [ ] Set up OpenAI embeddings
-- [ ] Implement similarity scoring
-- [ ] Create GPT-4o-mini integration for theme extraction
-- [ ] Combine filtering and extraction logic
+### Cost Factors
+- **Document size**: Larger documents require more processing
+- **Research focus**: More specific topics = better filtering = lower costs
+- **Relevance threshold**: Higher threshold = fewer chunks processed = lower costs
 
-### Step 5: Calculate Theme Relationships
-- [ ] Implement co-occurrence counting
-- [ ] Calculate correlation strengths
-- [ ] Measure relationship to research focus
+### Real-Time Cost Tracking
+The application provides accurate cost estimates based on:
+- Actual token counts for embeddings and theme extraction
+- Current OpenAI API pricing
+- Number of API calls made during processing
 
-### Step 6: Prepare Data for Streamlit
-- [ ] Create DataFrames for themes and relationships
-- [ ] Format data for visualization
-- [ ] Add metadata for interactive features
+## 🔧 Configuration Options
 
-### Step 7: Generate Streamlit Visualization
-- [ ] Create bubble chart with Plotly
-- [ ] Add interactive features
-- [ ] Implement Streamlit interface
+### Relevance Threshold
+- **0.7 (Default)**: Balanced accuracy and cost
+- **0.8**: Higher precision, lower cost, may miss themes
+- **0.6**: Lower precision, higher cost, more comprehensive
 
-## Development Notes
+### Theme Extraction
+- **Maximum themes**: Default 15, configurable based on document complexity
+- **Confidence threshold**: Themes below threshold are flagged for review
+- **Evidence requirements**: Each theme requires supporting evidence from text
 
-- Use simple for loops for chunking (no complex logic)
-- Combine steps 4 and 5 from original plan for efficiency
-- Focus on Streamlit for all visualization needs
-- Keep data structures simple and Streamlit-friendly
+## 🛠️ Development Features
 
-## API Costs
+### Enhanced Prompting System
+- Specific instructions for theme extraction quality
+- Evidence-based validation requirements
+- Confidence scoring with justification
+- Actionable theme naming conventions
 
-- OpenAI embeddings: ~$0.0001 per 1K tokens
-- GPT-4o-mini: ~$0.15 per 1M input tokens
-- Typical document analysis: $0.10 - $2.00 depending on document size
+### Error Handling
+- Graceful fallback for API failures
+- Keyword-based theme extraction backup
+- User-friendly error messages
+- Connection testing for API keys
 
-## Troubleshooting
+### Performance Optimization
+- Batch processing for API efficiency
+- Smart chunking to minimize API calls
+- Relevance filtering to reduce processing
+- Caching for repeated analyses
 
-### Common Issues:
+## 🚀 Deployment Ready
 
-1. **"Module not found" errors**
-   - Make sure virtual environment is activated
-   - Verify all packages are installed: `pip list`
+This tool is designed for easy deployment and sharing:
 
-2. **OpenAI API errors**
-   - Check your API key in `.env` file
-   - Verify you have credits in your OpenAI account
+### Features for Public Use
+- **No server-side API keys**: Users provide their own OpenAI keys
+- **Secure key handling**: Keys are session-based, not stored
+- **Cost transparency**: Users see exactly what they'll pay
+- **Professional UI**: Bootstrap icons and clean design
+- **Responsive design**: Works on desktop and mobile
 
-3. **PDF parsing errors**
-   - Ensure PDF is text-based (not scanned images)
-   - Try with different PDF files
+### Deployment Options
+- **Streamlit Community Cloud**: Free hosting for public repositories
+- **Local deployment**: Run on personal/organizational servers
+- **Docker support**: Containerized deployment (add Dockerfile if needed)
 
-4. **Streamlit won't start**
-   - Check if port 8501 is available
-   - Try: `streamlit run app.py --server.port 8502`
+## 📈 Use Cases
 
+### Academic Research
+- Literature review and theme identification
+- Research paper analysis and categorization
+- Grant proposal analysis and gap identification
 
+### Business Analysis
+- Market research document analysis
+- Competitive intelligence theme extraction  
+- Customer feedback and survey analysis
+
+### Content Analysis
+- Document classification and organization
+- Policy document analysis
+- Legal document theme extraction
+
+## ⚠️ Important Notes
+
+### API Key Security
+- API keys are stored in session state only
+- Keys are not logged or permanently stored
+- Use environment variables for development
+- Always use sidebar input for production/sharing
+
+### Document Requirements
+- PDF files must contain extractable text (not scanned images)
+- Optimal document size: 5-100 pages
+- Large documents (100+ pages) will require higher API costs
+
+### Cost Management
+- Start with higher relevance thresholds (0.8) to minimize costs
+- Use specific research topics for better filtering
+- Monitor the cost estimates before proceeding with analysis
+
+## 🤝 Contributing
+
+This project welcomes contributions! Areas for enhancement:
+- Additional document format support (DOCX, TXT)
+- Advanced visualization options
+- Export functionality for results
+- Batch processing capabilities
+- Custom theme extraction prompts
+
+## 📄 License
+
+[Add your chosen license here]
+
+## 🆘 Support
+
+For issues, questions, or feature requests:
+1. Check the troubleshooting section below
+2. Review the cost estimation if experiencing unexpected charges
+3. Verify API key configuration and connection
+
+### Common Troubleshooting
+
+**"Invalid API Key" errors**
+- Verify your OpenAI API key starts with 'sk-'
+- Test the key using the sidebar test button
+- Check your OpenAI account has available credits
+
+**High cost estimates**
+- Increase the relevance threshold to 0.8
+- Use more specific research topics
+- Consider processing shorter documents first
+
+**No themes extracted**
+- Lower the relevance threshold to 0.6
+- Verify your research topics relate to document content
+- Check that the PDF contains extractable text
+
+**Slow processing**
+- Large documents take more time (proportional to size)
+- API rate limits may cause delays
+- Consider processing during off-peak hours

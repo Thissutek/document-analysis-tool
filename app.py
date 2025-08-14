@@ -1304,14 +1304,17 @@ def main():
             st.markdown("---")
             st.markdown("### 💡 API Usage Info")
             st.info("""
-            **Cost Estimate:**
-            - Small doc (~5 pages): ~$0.02
-            - Medium doc (~20 pages): ~$0.08  
-            - Large doc (~100 pages): ~$0.40
+            **Typical Cost Range:**
+            - Small doc (~5 pages): **$0.003-0.008**
+            - Medium doc (~20 pages): **$0.008-0.015**  
+            - Large doc (~100 pages): **$0.015-0.030**
             
-            **Models Used:**
-            - gpt-4o-mini (theme extraction)
-            - text-embedding-ada-002 (similarity)
+            **Cost Breakdown:**
+            - Embedding analysis: ~80% of cost
+            - Theme extraction: ~15% of cost  
+            - Validation: ~5% of cost
+            
+            💡 *Affordable but scales with document length*
             """)
     
     # Check if API key is available
