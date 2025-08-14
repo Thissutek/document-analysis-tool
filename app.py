@@ -1203,10 +1203,90 @@ try:
 except ImportError:
     st.error("Source modules not found. Please ensure all modules in src/ are properly created.")
 
+def create_api_key_sidebar():
+    """Create sidebar for OpenAI API key management"""
+    st.sidebar.markdown("## 🔑 API Configuration")
+    
+    # Check for environment variable
+    env_key = os.getenv("OPENAI_API_KEY")
+    has_env_key = env_key and env_key != "your_openai_api_key_here"
+    
+    if has_env_key:
+        st.sidebar.success("✅ API key found in environment")
+        use_env_key = st.sidebar.checkbox("Use environment key", value=True, 
+                                         help="Uncheck to enter a different API key")
+        if use_env_key:
+            return env_key
+    else:
+        st.sidebar.info("ℹ️ No API key found in environment")
+    
+    # Manual API key input
+    api_key = st.sidebar.text_input(
+        "OpenAI API Key",
+        type="password",
+        placeholder="sk-...",
+        help="Enter your OpenAI API key to enable AI-powered analysis"
+    )
+    
+    if api_key:
+        # Test API key button
+        if st.sidebar.button("🧪 Test API Key"):
+            with st.sidebar:
+                test_result = test_openai_api_key(api_key)
+                if test_result["valid"]:
+                    st.success(f"✅ API key valid! Model: {test_result.get('model', 'gpt-4o-mini')}")
+                else:
+                    st.error(f"❌ API key invalid: {test_result.get('error', 'Unknown error')}")
+        
+        return api_key
+    
+    # No API key provided
+    st.sidebar.warning("⚠️ API key required for analysis")
+    st.sidebar.markdown("""
+    **Need an API key?**
+    1. Go to [OpenAI Platform](https://platform.openai.com)
+    2. Sign up/Login
+    3. Go to API Keys section
+    4. Create new secret key
+    5. Copy and paste here
+    """)
+    
+    return None
+
+def test_openai_api_key(api_key: str) -> dict:
+    """Test if OpenAI API key is valid"""
+    try:
+        import openai
+        client = openai.OpenAI(api_key=api_key)
+        
+        # Test with a simple completion
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": "Hello"}],
+            max_tokens=5
+        )
+        
+        return {
+            "valid": True, 
+            "model": "gpt-4o-mini",
+            "response": response.choices[0].message.content
+        }
+        
+    except openai.AuthenticationError:
+        return {"valid": False, "error": "Invalid API key"}
+    except openai.RateLimitError:
+        return {"valid": True, "error": "Rate limited (but key is valid)"}  
+    except openai.PermissionDeniedError:
+        return {"valid": False, "error": "Permission denied - check API key permissions"}
+    except Exception as e:
+        return {"valid": False, "error": f"Connection error: {str(e)}"}
+
 def main():
     st.set_page_config(
         page_title="Document Theme Analysis Tool",
-        layout="wide"
+        page_icon="📊",
+        layout="wide",
+        initial_sidebar_state="expanded"  # Show sidebar by default for API key
     )
     
     # Load Bootstrap CSS and modern styling
@@ -1215,15 +1295,43 @@ def main():
     st.title("Document Theme Analysis Tool")
     st.markdown("Analyze large text documents to identify themes and visualize their relationships")
     
-    # Check for OpenAI API key
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key or api_key == "your_openai_api_key_here":
-        st.error("OpenAI API key not found. Please set your OPENAI_API_KEY in the .env file.")
-        st.info("1. Copy .env.template to .env\n2. Add your OpenAI API key\n3. Restart the application")
-        st.stop()
+    # API Key Configuration
+    api_key = create_api_key_sidebar()
+    
+    # Add API usage info to sidebar
+    with st.sidebar:
+        if api_key:
+            st.markdown("---")
+            st.markdown("### 💡 API Usage Info")
+            st.info("""
+            **Cost Estimate:**
+            - Small doc (~5 pages): ~$0.02
+            - Medium doc (~20 pages): ~$0.08  
+            - Large doc (~100 pages): ~$0.40
+            
+            **Models Used:**
+            - gpt-4o-mini (theme extraction)
+            - text-embedding-ada-002 (similarity)
+            """)
+    
+    # Check if API key is available
+    if not api_key:
+        st.error("🔑 **OpenAI API Key Required**")
+        st.markdown("""
+        This tool requires an OpenAI API key to perform AI-powered theme analysis.
+        
+        **Please:**
+        1. Enter your API key in the sidebar ➡️
+        2. Test it to ensure it works
+        3. Then upload your document for analysis
+        
+        Your API key is stored only in this session and never saved to disk.
+        """)
+        return
     
     # Sidebar for inputs
     with st.sidebar:
+        st.markdown("---")
         st.header("Research Configuration")
         
         # File upload
@@ -1351,7 +1459,7 @@ def main():
             
             parser = DocumentParser()
             chunker = TextChunker(chunk_tokens=1000, overlap_tokens=100)
-            analyzer = ThemeAnalyzer()
+            analyzer = ThemeAnalyzer(api_key=api_key)
             calc = RelationshipCalculator()
             
             # Step 2: Extract and process document

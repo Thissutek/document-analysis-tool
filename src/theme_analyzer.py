@@ -13,20 +13,26 @@ import streamlit as st
 class ThemeAnalyzer:
     """AI-powered theme extraction and relevance filtering"""
     
-    def __init__(self):
-        """Initialize with OpenAI API key if available"""
-        api_key = os.getenv("OPENAI_API_KEY")
+    def __init__(self, api_key: str = None):
+        """Initialize with OpenAI API key"""
+        # Use provided API key or fall back to environment
+        if not api_key:
+            api_key = os.getenv("OPENAI_API_KEY")
+        
         if api_key and api_key != "your_openai_api_key_here":
             try:
                 self.client = openai.OpenAI(api_key=api_key)
                 self.has_api_key = True
+                self.api_key = api_key
             except Exception as e:
                 st.warning(f"OpenAI client initialization failed: {e}")
                 self.client = None
                 self.has_api_key = False
+                self.api_key = None
         else:
             self.client = None
             self.has_api_key = False
+            self.api_key = None
     
     def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
