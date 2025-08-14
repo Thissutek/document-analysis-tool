@@ -154,6 +154,743 @@ def validate_and_format_topics(topics_list):
     
     return valid_topics, warnings
 
+def create_theme_confidence_chart(theme_data):
+    """Create theme confidence distribution histogram"""
+    import plotly.express as px
+    import pandas as pd
+    
+    df_themes = pd.DataFrame(theme_data)
+    
+    fig = px.histogram(
+        df_themes, 
+        x='Confidence', 
+        nbins=10,
+        title="Distribution of Theme Confidence Scores",
+        labels={'Confidence': 'Confidence Score (0-1)', 'count': 'Number of Themes'},
+        color_discrete_sequence=['#667eea']
+    )
+    fig.update_layout(height=400)
+    return fig
+
+def create_frequency_confidence_scatter(theme_data):
+    """Create theme frequency vs confidence scatter plot"""
+    import plotly.express as px
+    import pandas as pd
+    
+    df_themes = pd.DataFrame(theme_data)
+    
+    fig = px.scatter(
+        df_themes,
+        x='Confidence',
+        y='Frequency',
+        hover_name='Theme',
+        color='Source',
+        title="Theme Confidence vs Document Frequency",
+        labels={'Confidence': 'Confidence Score (0-1)', 'Frequency': 'Document Chunks'},
+        size_max=15
+    )
+    fig.update_layout(height=400)
+    return fig
+
+def create_alignment_chart(alignment_data):
+    """Create research topics vs themes alignment chart"""
+    import plotly.express as px
+    import pandas as pd
+    
+    df_alignment = pd.DataFrame(alignment_data)
+    
+    fig = px.bar(
+        df_alignment.sort_values('Alignment Score', ascending=True).tail(20),
+        x='Alignment Score',
+        y='Theme',
+        color='Type',
+        hover_data=['Research Input', 'Theme Confidence'],
+        title="Top Theme-Topic Alignments",
+        orientation='h',
+        color_discrete_map={'Topic': '#667eea', 'Question': '#764ba2'}
+    )
+    fig.update_layout(height=max(400, len(df_alignment.tail(20)) * 20))
+    return fig
+
+def create_coverage_chart(topic_coverage):
+    """Create research topic coverage chart"""
+    import plotly.express as px
+    import pandas as pd
+    
+    df_coverage = pd.DataFrame(topic_coverage)
+    
+    fig = px.bar(
+        df_coverage,
+        x='Research Input',
+        y='Related Themes',
+        color='Coverage Status',
+        title="Research Topic Coverage Analysis",
+        labels={'Related Themes': 'Number of Related Themes Found'},
+        color_discrete_map={'Good': '#10b981', 'Partial': '#f59e0b', 'Poor': '#ef4444'}
+    )
+    fig.update_xaxes(tickangle=45)
+    fig.update_layout(height=400)
+    return fig
+
+def create_pyvis_network(extracted_themes, relationship_analysis):
+    """Create interactive PyVis network visualization"""
+    try:
+        from pyvis.network import Network
+        import streamlit.components.v1 as components
+        import tempfile
+        import os
+        
+        # Prepare themes data
+        themes = []
+        for theme in extracted_themes:
+            confidence = theme.get('confidence', 0)
+            frequency = theme.get('chunk_frequency', 1)
+            
+            # Determine cluster based on confidence
+            if confidence > 0.7:
+                cluster = "High Confidence"
+                color = "#10b981"
+            elif confidence > 0.4:
+                cluster = "Medium Confidence"
+                color = "#f59e0b"
+            else:
+                cluster = "Low Confidence"
+                color = "#ef4444"
+            
+            # Size based on frequency and confidence
+            size = max(15, min(60, frequency * 10 + confidence * 30))
+            
+            themes.append({
+                "id": theme['name'],
+                "size": size,
+                "cluster": cluster,
+                "color": color,
+                "confidence": confidence,
+                "frequency": frequency,
+                "description": theme.get('description', 'No description available')
+            })
+        
+        # Prepare relationships data
+        relationships = []
+        if relationship_analysis and 'theme_relationships' in relationship_analysis:
+            for rel in relationship_analysis['theme_relationships']:
+                source = rel.get('theme1', '')
+                target = rel.get('theme2', '')
+                weight = rel.get('strength', 0.1)
+                
+                if weight > 0.1:  # Only meaningful relationships
+                    relationships.append({
+                        "source": source,
+                        "target": target,
+                        "weight": weight
+                    })
+        
+        # If no explicit relationships, create based on co-occurrence
+        if not relationships:
+            for i, theme1 in enumerate(extracted_themes):
+                for j, theme2 in enumerate(extracted_themes[i+1:], i+1):
+                    # Safely get chunk_ids and convert to set
+                    chunk_ids1 = theme1.get('chunk_ids', [])
+                    chunk_ids2 = theme2.get('chunk_ids', [])
+                    
+                    # Ensure we have lists/iterables, not sets
+                    if hasattr(chunk_ids1, '__iter__') and not isinstance(chunk_ids1, str):
+                        theme1_chunks = set(chunk_ids1) if chunk_ids1 else set()
+                    else:
+                        theme1_chunks = set()
+                    
+                    if hasattr(chunk_ids2, '__iter__') and not isinstance(chunk_ids2, str):
+                        theme2_chunks = set(chunk_ids2) if chunk_ids2 else set()
+                    else:
+                        theme2_chunks = set()
+                    
+                    if theme1_chunks and theme2_chunks:
+                        overlap = len(theme1_chunks.intersection(theme2_chunks))
+                        total = len(theme1_chunks.union(theme2_chunks))
+                        weight = overlap / total if total > 0 else 0
+                        
+                        if weight > 0.15:  # Meaningful co-occurrence
+                            relationships.append({
+                                "source": theme1['name'],
+                                "target": theme2['name'],
+                                "weight": weight
+                            })
+        
+        # Create PyVis network with modern dark theme
+        net = Network(
+            height="750px",
+            width="100%",
+            bgcolor="#1a1a1a",
+            font_color="white",
+            directed=False
+        )
+        
+        # Use Barnes-Hut physics for better performance and layout
+        net.barnes_hut()
+        
+        # Configure modern physics and styling
+        net.set_options("""
+        {
+          "physics": {
+            "enabled": true,
+            "stabilization": {"iterations": 150},
+            "barnesHut": {
+              "gravitationalConstant": -3000,
+              "centralGravity": 0.1,
+              "springLength": 120,
+              "springConstant": 0.02,
+              "damping": 0.15,
+              "avoidOverlap": 0.2
+            }
+          },
+          "interaction": {
+            "hover": true,
+            "tooltipDelay": 100,
+            "zoomView": true,
+            "dragView": true,
+            "selectConnectedEdges": false,
+            "hoverConnectedEdges": true
+          },
+          "nodes": {
+            "font": {
+              "size": 16,
+              "color": "white",
+              "face": "Inter, -apple-system, BlinkMacSystemFont, sans-serif"
+            },
+            "borderWidth": 3,
+            "borderWidthSelected": 5,
+            "shadow": {
+              "enabled": true,
+              "color": "rgba(0,0,0,0.6)",
+              "size": 15,
+              "x": 3,
+              "y": 3
+            },
+            "scaling": {
+              "min": 15,
+              "max": 60
+            },
+            "chosen": {
+              "node": "function(values, id, selected, hovering) { values.shadow = true; values.shadowSize = 20; }"
+            }
+          },
+          "edges": {
+            "smooth": {
+              "enabled": true,
+              "type": "continuous",
+              "roundness": 0.5
+            },
+            "shadow": {
+              "enabled": true,
+              "color": "rgba(255,255,255,0.1)",
+              "size": 8,
+              "x": 2,
+              "y": 2
+            },
+            "color": {
+              "inherit": false,
+              "opacity": 0.7
+            },
+            "chosen": {
+              "edge": "function(values, id, selected, hovering) { values.opacity = 1; }"
+            }
+          }
+        }
+        """)
+        
+        # First pass: Add all nodes
+        theme_id_map = {}
+        for i, theme in enumerate(themes):
+            theme_id = theme['id']
+            theme_id_map[theme_id] = i
+            
+            net.add_node(
+                theme_id,
+                label=theme_id[:25] + '...' if len(theme_id) > 25 else theme_id,
+                title=theme_id,  # Will be enhanced later with neighbors
+                size=theme['size'],
+                color=theme['color'],
+                group=theme['cluster'],
+                value=theme['frequency'],  # Used for size scaling
+                confidence=theme['confidence'],
+                description=theme['description']
+            )
+        
+        # Add edges with modern styling
+        for rel in relationships:
+            source = rel['source']
+            target = rel['target']
+            
+            if source in theme_id_map and target in theme_id_map:
+                # Edge width and color based on weight
+                edge_width = max(1, rel['weight'] * 12)
+                
+                # Modern gradient colors based on relationship strength
+                if rel['weight'] > 0.7:
+                    edge_color = "#00d4aa"  # Strong - teal
+                elif rel['weight'] > 0.4:
+                    edge_color = "#fbbf24"  # Medium - amber  
+                else:
+                    edge_color = "#64748b"  # Weak - slate
+                
+                net.add_edge(
+                    source,
+                    target,
+                    value=rel['weight'],  # This affects edge thickness
+                    color=edge_color,
+                    title=f"Relationship Strength: {rel['weight']:.3f}",
+                    width=edge_width
+                )
+        
+        # Add neighbor information to tooltips (like Game of Thrones example)
+        try:
+            neighbor_map = net.get_adj_list()
+        except Exception as e:
+            print(f"Error getting adjacency list: {e}")
+            neighbor_map = {}
+        
+        # Enhanced tooltips with neighbor data and topic relations
+        for node in net.nodes:
+            try:
+                node_id = node.get("id", "Unknown")
+                neighbors = neighbor_map.get(node_id, [])
+                
+                # Get original theme data
+                theme_info = next((t for t in themes if t.get("id") == node_id), {})
+                
+                # Ensure we have valid data
+                confidence = theme_info.get('confidence', 0)
+                frequency = theme_info.get('frequency', 0)
+                cluster = theme_info.get('cluster', 'Unknown')
+                description = theme_info.get('description', 'No description available')
+                
+                # Create rich tooltip with modern dark styling
+                tooltip_html = f"""
+                <div style='
+                    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+                    color: white;
+                    padding: 16px;
+                    border-radius: 12px;
+                    max-width: 350px;
+                    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+                    border: 1px solid rgba(148, 163, 184, 0.2);
+                    font-family: Inter, -apple-system, sans-serif;
+                '>
+                    <h3 style='margin: 0 0 12px 0; color: #f1f5f9; font-size: 18px; font-weight: 600;'>
+                        {node_id}
+                    </h3>
+                    
+                    <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;'>
+                        <div style='background: rgba(16, 185, 129, 0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #10b981;'>
+                            <div style='font-size: 12px; color: #94a3b8;'>Confidence</div>
+                            <div style='font-size: 16px; font-weight: 600; color: #10b981;'>{confidence:.2f}</div>
+                        </div>
+                        <div style='background: rgba(59, 130, 246, 0.1); padding: 8px; border-radius: 6px; border-left: 3px solid #3b82f6;'>
+                            <div style='font-size: 12px; color: #94a3b8;'>Frequency</div>
+                            <div style='font-size: 16px; font-weight: 600; color: #3b82f6;'>{frequency}</div>
+                        </div>
+                    </div>
+                    
+                    <div style='margin-bottom: 12px;'>
+                        <div style='font-size: 14px; color: #cbd5e1; margin-bottom: 4px;'>Cluster: {cluster}</div>
+                        <div style='font-size: 13px; color: #94a3b8; line-height: 1.4;'>
+                            {description[:120]}{'...' if len(description) > 120 else ''}
+                        </div>
+                    </div>
+                """
+            
+                if neighbors:
+                    # Add related themes section
+                    tooltip_html += f"""
+                    <div style='border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 12px;'>
+                        <div style='font-size: 14px; font-weight: 600; color: #f1f5f9; margin-bottom: 8px;'>
+                            🔗 Related Themes ({len(neighbors)}):
+                        </div>
+                        <div style='display: flex; flex-wrap: wrap; gap: 6px;'>
+                    """
+                    
+                    # Show up to 5 neighbors as tags
+                    for neighbor in neighbors[:5]:
+                        neighbor_theme = next((t for t in themes if t.get("id") == neighbor), {})
+                        neighbor_confidence = neighbor_theme.get('confidence', 0)
+                        
+                        # Color based on confidence
+                        if neighbor_confidence > 0.7:
+                            tag_color = "#10b981"
+                        elif neighbor_confidence > 0.4:
+                            tag_color = "#f59e0b" 
+                        else:
+                            tag_color = "#64748b"
+                        
+                        tooltip_html += f"""
+                            <span style='
+                                background: {tag_color}20;
+                                color: {tag_color};
+                                padding: 4px 8px;
+                                border-radius: 16px;
+                                font-size: 12px;
+                                border: 1px solid {tag_color}40;
+                            '>
+                                {str(neighbor)[:20]}{'...' if len(str(neighbor)) > 20 else ''}
+                            </span>
+                        """
+                    
+                    if len(neighbors) > 5:
+                        tooltip_html += f"""
+                            <span style='
+                                background: rgba(148, 163, 184, 0.1);
+                                color: #94a3b8;
+                                padding: 4px 8px;
+                                border-radius: 16px;
+                                font-size: 12px;
+                                border: 1px solid rgba(148, 163, 184, 0.2);
+                            '>
+                                +{len(neighbors) - 5} more
+                            </span>
+                        """
+                    
+                    tooltip_html += "</div></div>"
+                
+                tooltip_html += "</div>"
+                
+                # Update node with enhanced tooltip and neighbor count
+                node["title"] = tooltip_html
+                node["value"] = len(neighbors)  # This affects node size
+                
+            except Exception as e:
+                print(f"Error processing node {node.get('id', 'unknown')}: {e}")
+                # Fallback to simple tooltip
+                node["title"] = f"Theme: {node.get('id', 'Unknown')}"
+                node["value"] = 1
+        
+        # Generate and return HTML
+        if len(themes) > 0:
+            # Create temporary file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as tmp:
+                net.save_graph(tmp.name)
+                tmp_path = tmp.name
+            
+            # Read the HTML content
+            with open(tmp_path, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            
+            # Clean up temp file
+            os.unlink(tmp_path)
+            
+            return html_content
+        else:
+            return None
+            
+    except ImportError:
+        return "PyVis not available - install with: pip install pyvis"
+    except Exception as e:
+        return f"Error creating PyVis network: {str(e)}"
+
+def create_network_visualization(extracted_themes, relationship_analysis):
+    """Create interactive network visualization of themes and their relationships"""
+    try:
+        import plotly.graph_objects as go
+        import networkx as nx
+        import pandas as pd
+        import numpy as np
+        
+        # Create network graph
+        G = nx.Graph()
+        
+        # Add nodes (themes)
+        node_data = []
+        for i, theme in enumerate(extracted_themes):
+            theme_name = theme['name']
+            confidence = theme.get('confidence', 0)
+            frequency = theme.get('chunk_frequency', 1)
+            
+            # Determine cluster/color based on confidence
+            if confidence > 0.7:
+                cluster = 'High Confidence'
+                color = '#10b981'
+            elif confidence > 0.4:
+                cluster = 'Medium Confidence' 
+                color = '#f59e0b'
+            else:
+                cluster = 'Low Confidence'
+                color = '#ef4444'
+            
+            # Node size based on frequency and confidence
+            size = max(10, min(50, frequency * 15 + confidence * 20))
+            
+            G.add_node(theme_name, 
+                      confidence=confidence,
+                      frequency=frequency,
+                      cluster=cluster,
+                      color=color,
+                      size=size)
+            
+            node_data.append({
+                'name': theme_name,
+                'confidence': confidence,
+                'frequency': frequency,
+                'cluster': cluster,
+                'color': color,
+                'size': size
+            })
+        
+        # Add edges (relationships)
+        edge_data = []
+        if relationship_analysis and 'theme_relationships' in relationship_analysis:
+            relationships = relationship_analysis['theme_relationships']
+            
+            for rel in relationships:
+                source = rel.get('theme1', '')
+                target = rel.get('theme2', '')
+                weight = rel.get('strength', 0.1)
+                
+                if source in G.nodes and target in G.nodes and weight > 0.1:
+                    G.add_edge(source, target, weight=weight)
+                    edge_data.append({
+                        'source': source,
+                        'target': target,
+                        'weight': weight
+                    })
+        
+        # If no relationships, create connections based on co-occurrence in chunks
+        if not edge_data:
+            # Create artificial relationships based on themes appearing in same chunks
+            for i, theme1 in enumerate(extracted_themes):
+                for j, theme2 in enumerate(extracted_themes[i+1:], i+1):
+                    theme1_chunks = set(theme1.get('chunk_ids', []))
+                    theme2_chunks = set(theme2.get('chunk_ids', []))
+                    
+                    # Calculate co-occurrence
+                    if theme1_chunks and theme2_chunks:
+                        overlap = len(theme1_chunks.intersection(theme2_chunks))
+                        total = len(theme1_chunks.union(theme2_chunks))
+                        weight = overlap / total if total > 0 else 0
+                        
+                        if weight > 0.1:  # Only add meaningful connections
+                            G.add_edge(theme1['name'], theme2['name'], weight=weight)
+                            edge_data.append({
+                                'source': theme1['name'],
+                                'target': theme2['name'],
+                                'weight': weight
+                            })
+        
+        # Generate layout
+        if len(G.nodes) > 0:
+            pos = nx.spring_layout(G, k=3, iterations=50)
+            
+            # Extract node positions and data
+            node_trace_high = go.Scatter(x=[], y=[], mode='markers+text', 
+                                        name='High Confidence', 
+                                        marker=dict(color='#10b981', size=[], line=dict(width=2)),
+                                        text=[], textposition="middle center",
+                                        hovertemplate='<b>%{text}</b><br>Confidence: %{customdata[0]:.2f}<br>Frequency: %{customdata[1]}<extra></extra>',
+                                        customdata=[])
+            
+            node_trace_med = go.Scatter(x=[], y=[], mode='markers+text',
+                                       name='Medium Confidence',
+                                       marker=dict(color='#f59e0b', size=[], line=dict(width=2)),
+                                       text=[], textposition="middle center",
+                                       hovertemplate='<b>%{text}</b><br>Confidence: %{customdata[0]:.2f}<br>Frequency: %{customdata[1]}<extra></extra>',
+                                       customdata=[])
+            
+            node_trace_low = go.Scatter(x=[], y=[], mode='markers+text',
+                                       name='Low Confidence', 
+                                       marker=dict(color='#ef4444', size=[], line=dict(width=2)),
+                                       text=[], textposition="middle center",
+                                       hovertemplate='<b>%{text}</b><br>Confidence: %{customdata[0]:.2f}<br>Frequency: %{customdata[1]}<extra></extra>',
+                                       customdata=[])
+            
+            # Add nodes to appropriate traces
+            for node in G.nodes():
+                x, y = pos[node]
+                node_info = G.nodes[node]
+                confidence = node_info['confidence']
+                frequency = node_info['frequency']
+                size = node_info['size']
+                
+                # Truncate long theme names for display
+                display_name = node[:15] + '...' if len(node) > 15 else node
+                
+                if confidence > 0.7:
+                    node_trace_high['x'] += tuple([x])
+                    node_trace_high['y'] += tuple([y])
+                    node_trace_high['text'] += tuple([display_name])
+                    node_trace_high['marker']['size'] += tuple([size])
+                    node_trace_high['customdata'] += tuple([[confidence, frequency]])
+                elif confidence > 0.4:
+                    node_trace_med['x'] += tuple([x])
+                    node_trace_med['y'] += tuple([y])
+                    node_trace_med['text'] += tuple([display_name])
+                    node_trace_med['marker']['size'] += tuple([size])
+                    node_trace_med['customdata'] += tuple([[confidence, frequency]])
+                else:
+                    node_trace_low['x'] += tuple([x])
+                    node_trace_low['y'] += tuple([y])
+                    node_trace_low['text'] += tuple([display_name])
+                    node_trace_low['marker']['size'] += tuple([size])
+                    node_trace_low['customdata'] += tuple([[confidence, frequency]])
+            
+            # Create edge traces
+            edge_traces = []
+            for edge in G.edges():
+                x0, y0 = pos[edge[0]]
+                x1, y1 = pos[edge[1]]
+                weight = G.edges[edge]['weight']
+                
+                edge_trace = go.Scatter(x=[x0, x1, None], y=[y0, y1, None],
+                                       mode='lines',
+                                       line=dict(width=max(1, weight * 10), color='rgba(125, 125, 125, 0.3)'),
+                                       hoverinfo='none',
+                                       showlegend=False)
+                edge_traces.append(edge_trace)
+            
+            # Create figure
+            fig = go.Figure(data=edge_traces + [node_trace_high, node_trace_med, node_trace_low])
+            
+            fig.update_layout(
+                title="Theme Relationship Network",
+                titlefont_size=16,
+                showlegend=True,
+                hovermode='closest',
+                margin=dict(b=20,l=5,r=5,t=40),
+                annotations=[ dict(
+                    text="Node size = frequency + confidence | Edge thickness = relationship strength",
+                    showarrow=False,
+                    xref="paper", yref="paper",
+                    x=0.005, y=-0.002,
+                    xanchor='left', yanchor='bottom',
+                    font=dict(size=12, color="gray")
+                )],
+                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                height=600
+            )
+            
+            return fig
+        else:
+            return None
+            
+    except Exception as e:
+        print(f"Error creating network visualization: {e}")
+        return None
+
+def calculate_alignment_data(research_topics, extracted_themes):
+    """Calculate topic-theme alignment data"""
+    alignment_data = []
+    for topic in research_topics:
+        topic_lower = topic.lower()
+        topic_type = "Question" if "?" in topic else "Topic"
+        
+        for theme in extracted_themes:
+            theme_name = theme['name']
+            theme_lower = theme_name.lower()
+            
+            # Calculate alignment
+            topic_words = set(topic_lower.split())
+            theme_words = set(theme_lower.split())
+            
+            if topic_words and theme_words:
+                word_alignment = len(topic_words.intersection(theme_words)) / len(topic_words.union(theme_words))
+            else:
+                word_alignment = 0
+            
+            # Check description alignment
+            description = theme.get('description', '').lower()
+            desc_alignment = sum(1 for word in topic_words if word in description) / len(topic_words) if topic_words else 0
+            
+            final_alignment = max(word_alignment, desc_alignment * 0.8)
+            
+            if final_alignment > 0.1:  # Only show meaningful alignments
+                alignment_data.append({
+                    'Research Input': topic[:50] + '...' if len(topic) > 50 else topic,
+                    'Type': topic_type,
+                    'Theme': theme_name,
+                    'Alignment Score': final_alignment,
+                    'Theme Confidence': theme.get('confidence', 0),
+                    'Full Topic': topic
+                })
+    
+    return alignment_data
+
+def calculate_topic_coverage(research_topics, extracted_themes):
+    """Calculate topic coverage statistics"""
+    topic_coverage = []
+    for topic in research_topics:
+        topic_lower = topic.lower()
+        topic_type = "Question" if "?" in topic else "Topic"
+        related_count = 0
+        max_alignment = 0
+        
+        for theme in extracted_themes:
+            theme_lower = theme['name'].lower()
+            topic_words = set(topic_lower.split())
+            theme_words = set(theme_lower.split())
+            
+            if topic_words and theme_words:
+                alignment = len(topic_words.intersection(theme_words)) / len(topic_words.union(theme_words))
+            else:
+                alignment = 0
+            
+            description = theme.get('description', '').lower()
+            desc_alignment = sum(1 for word in topic_words if word in description) / len(topic_words) if topic_words else 0
+            final_alignment = max(alignment, desc_alignment * 0.8)
+            
+            if final_alignment > 0.15:
+                related_count += 1
+                max_alignment = max(max_alignment, final_alignment)
+        
+        topic_coverage.append({
+            'Research Input': topic[:40] + '...' if len(topic) > 40 else topic,
+            'Type': topic_type,
+            'Related Themes': related_count,
+            'Best Alignment': max_alignment,
+            'Coverage Status': 'Good' if related_count >= 2 else 'Partial' if related_count == 1 else 'Poor'
+        })
+    
+    return topic_coverage
+
+def generate_insights(topic_coverage, theme_data, alignment_data):
+    """Generate AI insights based on analysis results"""
+    insights = []
+    
+    # Coverage insights
+    good_coverage = len([t for t in topic_coverage if t['Coverage Status'] == 'Good'])
+    poor_coverage = len([t for t in topic_coverage if t['Coverage Status'] == 'Poor'])
+    
+    if good_coverage > poor_coverage:
+        insights.append("✅ Most research topics have good theme coverage in the document")
+    elif poor_coverage > good_coverage:
+        insights.append("⚠️ Many research topics lack related themes - consider refining topics or checking document relevance")
+    else:
+        insights.append("📊 Mixed coverage - some topics well represented, others not found")
+    
+    # Confidence insights
+    high_conf_themes = len([t for t in theme_data if t['Confidence'] > 0.7])
+    total_themes = len(theme_data)
+    
+    if total_themes > 0:
+        if high_conf_themes / total_themes > 0.6:
+            insights.append("🎯 High-quality analysis with most themes having strong confidence scores")
+        elif high_conf_themes / total_themes > 0.3:
+            insights.append("📈 Moderate analysis quality - consider adjusting relevance threshold")
+        else:
+            insights.append("⚡ Lower confidence themes - document may not strongly match research topics")
+    
+    # Alignment insights
+    if alignment_data:
+        import pandas as pd
+        df_alignment = pd.DataFrame(alignment_data)
+        avg_alignment = df_alignment['Alignment Score'].mean()
+        
+        if avg_alignment > 0.4:
+            insights.append("🔗 Strong alignment between research topics and extracted themes")
+        elif avg_alignment > 0.2:
+            insights.append("🔍 Moderate alignment - some thematic overlap found")
+        else:
+            insights.append("❓ Weak alignment - extracted themes may be broader than research focus")
+    
+    return insights
+
 def _display_theme_relevance_charts(extracted_themes, research_topics, viz_data):
     """Display interactive charts showing theme relevance and relationships"""
     import plotly.express as px
@@ -614,8 +1351,8 @@ def main():
         
         # Create main tabs
         if results['extracted_themes']:
-            # Create tab names - Overview + All Chunks + individual chunks with themes
-            tab_names = ["Overview", "All Chunks"]
+            # Create tab names - Overview + All Chunks + Visualization + individual chunks with themes
+            tab_names = ["Overview", "All Chunks", "Visualization"]
             
             # Add chunk tabs only for chunks that have themes
             sorted_chunk_ids = sorted(chunk_theme_mapping.keys())
@@ -819,9 +1556,137 @@ def main():
                                 else:
                                     st.write("No specific reason found")
             
+            # Visualization Tab
+            with tabs[2]:
+                st.markdown(f"### {get_bootstrap_icon('bar-chart')} Theme and Topic Analysis Visualization", unsafe_allow_html=True)
+                st.write("Interactive visualizations showing relationships between your research topics and extracted themes:")
+                
+                try:
+                    if results['extracted_themes']:
+                        # Prepare theme data
+                        theme_data = []
+                        for theme in results['extracted_themes']:
+                            theme_data.append({
+                                'Theme': theme['name'],
+                                'Confidence': theme.get('confidence', 0),
+                                'Frequency': theme.get('chunk_frequency', 0),
+                                'Source': theme.get('source', 'unknown')
+                            })
+                        
+                        # Calculate alignments and coverage
+                        alignment_data = calculate_alignment_data(results['research_topics'], results['extracted_themes'])
+                        topic_coverage = calculate_topic_coverage(results['research_topics'], results['extracted_themes'])
+                        
+                        # Chart 1: Interactive Network Graphs
+                        st.markdown("#### Theme Relationship Network")
+                        
+                        # Network visualization choice
+                        network_type = st.radio(
+                            "Choose network visualization:",
+                            ["PyVis (Interactive)", "Plotly (Static)"],
+                            horizontal=True
+                        )
+                        
+                        if network_type == "PyVis (Interactive)":
+                            # PyVis Network
+                            pyvis_html = create_pyvis_network(results['extracted_themes'], results['relationship_analysis'])
+                            if pyvis_html and not isinstance(pyvis_html, str) or (isinstance(pyvis_html, str) and not pyvis_html.startswith("Error") and not pyvis_html.startswith("PyVis not")):
+                                import streamlit.components.v1 as components
+                                components.html(pyvis_html, height=620)
+                                st.write("**Interactive Features:** Drag nodes, zoom, hover for details, click to select. Colors indicate confidence levels.")
+                            elif isinstance(pyvis_html, str):
+                                st.error(pyvis_html)
+                                st.info("Falling back to Plotly visualization...")
+                                network_fig = create_network_visualization(results['extracted_themes'], results['relationship_analysis'])
+                                if network_fig:
+                                    st.plotly_chart(network_fig, use_container_width=True)
+                            else:
+                                st.info("PyVis network not available - insufficient relationship data. Showing Plotly version...")
+                                network_fig = create_network_visualization(results['extracted_themes'], results['relationship_analysis'])
+                                if network_fig:
+                                    st.plotly_chart(network_fig, use_container_width=True)
+                        else:
+                            # Plotly Network
+                            network_fig = create_network_visualization(results['extracted_themes'], results['relationship_analysis'])
+                            if network_fig:
+                                st.plotly_chart(network_fig, use_container_width=True)
+                                st.write("**How to read:** Nodes represent themes (size = frequency + confidence). " +
+                                       "Lines show relationships (thickness = strength). Colors indicate confidence levels.")
+                            else:
+                                st.info("Network visualization not available - insufficient relationship data")
+                        
+                        # Chart 2: Theme Confidence Distribution
+                        st.markdown("#### Theme Confidence Distribution")
+                        fig1 = create_theme_confidence_chart(theme_data)
+                        st.plotly_chart(fig1, use_container_width=True)
+                        
+                        # Chart 3: Theme Frequency vs Confidence Scatter
+                        st.markdown("#### Theme Frequency vs Confidence Analysis")
+                        fig2 = create_frequency_confidence_scatter(theme_data)
+                        st.plotly_chart(fig2, use_container_width=True)
+                        
+                        # Chart 4: Research Topics vs Themes Alignment (if alignments exist)
+                        if alignment_data:
+                            st.markdown("#### Research Topics vs Extracted Themes Alignment")
+                            fig3 = create_alignment_chart(alignment_data)
+                            st.plotly_chart(fig3, use_container_width=True)
+                            
+                            # Chart 5: Topic Coverage Summary
+                            st.markdown("#### Research Topic Coverage Summary")
+                            fig4 = create_coverage_chart(topic_coverage)
+                            st.plotly_chart(fig4, use_container_width=True)
+                            
+                            # Summary Statistics
+                            st.markdown("#### Analysis Summary Statistics")
+                            
+                            col1, col2, col3, col4 = st.columns(4)
+                            
+                            with col1:
+                                total_topics = len(results['research_topics'])
+                                st.metric("Total Research Inputs", total_topics)
+                            
+                            with col2:
+                                covered_topics = len([t for t in topic_coverage if t['Coverage Status'] != 'Poor'])
+                                coverage_pct = (covered_topics / total_topics * 100) if total_topics > 0 else 0
+                                st.metric("Topics with Themes", f"{covered_topics}/{total_topics}", f"{coverage_pct:.1f}%")
+                            
+                            with col3:
+                                import pandas as pd
+                                df_alignment = pd.DataFrame(alignment_data)
+                                avg_alignment = df_alignment['Alignment Score'].mean() if not df_alignment.empty else 0
+                                st.metric("Avg Topic-Theme Alignment", f"{avg_alignment:.3f}")
+                            
+                            with col4:
+                                import pandas as pd
+                                df_themes = pd.DataFrame(theme_data)
+                                avg_confidence = df_themes['Confidence'].mean() if not df_themes.empty else 0
+                                st.metric("Avg Theme Confidence", f"{avg_confidence:.3f}")
+                            
+                            # AI-Generated Insights
+                            st.markdown("#### Key Insights")
+                            insights = generate_insights(topic_coverage, theme_data, alignment_data)
+                            
+                            for insight in insights:
+                                st.write(f"• {insight}")
+                        
+                        else:
+                            st.info("No meaningful alignments found between research topics and extracted themes. This could mean:")
+                            st.write("• The document content doesn't match your research focus")
+                            st.write("• Research topics need to be more specific")
+                            st.write("• Consider adjusting the analysis threshold settings")
+                    
+                    else:
+                        st.warning("No themes available for visualization")
+                
+                except ImportError:
+                    st.error("Visualization libraries not available. Please install plotly, pandas, and networkx.")
+                except Exception as e:
+                    st.error(f"Error generating visualizations: {str(e)}")
+                    st.exception(e)  # Show full traceback for debugging
+            
             # Individual Chunk Tabs
             for i, chunk_id in enumerate(sorted_chunk_ids):
-                with tabs[i + 2]:  # +2 because first tab is overview, second is all chunks
+                with tabs[i + 3]:  # +3 because tabs are: Overview, All Chunks, Visualization, then individual chunks
                     chunk_data = chunk_theme_mapping[chunk_id]
                     theme_count = len(chunk_data['themes'])
                     relevance = chunk_data['relevance_score']
