@@ -1,158 +1,49 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv
-import re
 
 # Load environment variables
 load_dotenv()
 
-# Bootstrap icons and modern UI helper functions
-def load_bootstrap_css():
-    """Load Bootstrap Icons and custom CSS for modern UI"""
-    st.markdown("""
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <style>
-    .metric-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        border: 1px solid #e1e5e9;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        margin-bottom: 1rem;
-        transition: box-shadow 0.2s ease;
-    }
-    .metric-card:hover {
-        box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-    }
-    .theme-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        margin-bottom: 1rem;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-    }
-    .chunk-card {
-        background: white;
-        border: 1px solid #e1e5e9;
-        border-radius: 12px;
-        padding: 1.5rem;
-        margin-bottom: 1rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    }
-    .status-success { color: #10b981; }
-    .status-warning { color: #f59e0b; }
-    .status-error { color: #ef4444; }
-    .icon { margin-right: 8px; }
-    </style>
-    """, unsafe_allow_html=True)
+# Import UI components
+from src.ui.ui_components import (
+    load_bootstrap_css,
+    create_metric_card,
+    get_bootstrap_icon,
+    create_research_analysis_card,
+    validate_and_format_topics
+)
 
-def create_metric_card(title, value, icon, description=None):
-    """Create a modern metric card"""
-    desc_html = f'<p style="margin: 0; color: #6b7280; font-size: 0.9rem;">{description}</p>' if description else ''
-    return f"""
-    <div class="metric-card">
-        <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
-            <i class="bi bi-{icon} icon" style="font-size: 1.2rem; color: #667eea;"></i>
-            <span style="font-weight: 600; color: #374151;">{title}</span>
-        </div>
-        <div style="font-size: 1.8rem; font-weight: 700; color: #111827; margin-bottom: 0.25rem;">{value}</div>
-        {desc_html}
-    </div>
-    """
+# Import chart generators
+from src.visualization.chart_generators import (
+    create_theme_confidence_chart,
+    create_frequency_confidence_scatter,
+    create_alignment_chart,
+    create_coverage_chart,
+    create_interactive_chord_diagram,
+    create_pyvis_network,
+    create_network_visualization
+)
 
-def get_bootstrap_icon(icon_name):
-    """Return Bootstrap icon HTML"""
-    return f'<i class="bi bi-{icon_name} icon"></i>'
-
-def create_research_analysis_card(research_topics, topic_warnings):
-    """Create a card showing the AI's understanding of research topics"""
-    topics_html = ""
-    if research_topics:
-        topics_html = "<ul style='margin: 0; padding-left: 20px;'>"
-        for topic in research_topics[:8]:  # Show first 8 topics
-            topics_html += f"<li style='margin-bottom: 4px; color: #374151;'>{topic}</li>"
-        if len(research_topics) > 8:
-            topics_html += f"<li style='color: #6b7280; font-style: italic;'>...and {len(research_topics) - 8} more</li>"
-        topics_html += "</ul>"
-    
-    warnings_html = ""
-    if topic_warnings:
-        warnings_html = f"""
-        <div style="margin-top: 12px; padding: 8px; background: #fef3cd; border-radius: 6px; border-left: 3px solid #f59e0b;">
-            <div style="font-size: 0.9rem; color: #92400e; font-weight: 500;">
-                <i class="bi bi-exclamation-triangle" style="margin-right: 4px;"></i>
-                Processing Notes:
-            </div>
-            <div style="font-size: 0.8rem; color: #92400e; margin-top: 4px;">
-                {len(topic_warnings)} topics were adjusted during processing
-            </div>
-        </div>
-        """
-    
-    return f"""
-    <div class="metric-card" style="margin-bottom: 2rem;">
-        <div style="display: flex; align-items: center; margin-bottom: 1rem;">
-            <i class="bi bi-lightbulb icon" style="font-size: 1.2rem; color: #667eea;"></i>
-            <span style="font-weight: 600; color: #374151; font-size: 1.1rem;">AI Research Understanding</span>
-        </div>
-        <div style="color: #6b7280; margin-bottom: 12px; font-size: 0.95rem;">
-            The AI processed your input and identified these key research areas:
-        </div>
-        {topics_html}
-        <div style="margin-top: 12px; font-size: 0.9rem; color: #6b7280;">
-            <strong>{len(research_topics)}</strong> research topics • Analysis will focus on finding themes related to these areas
-        </div>
-        {warnings_html}
-    </div>
-    """
+# Import analysis helpers
+from src.analysis.analysis_helpers import (
+    calculate_alignment_data,
+    calculate_topic_coverage,
+    generate_insights,
+    calculate_theme_statistics,
+    analyze_theme_relationships
+)
 
 
-def validate_and_format_topics(topics_list):
-    """
-    Validate and format research topics
-    
-    Args:
-        topics_list: List of topic strings
-        
-    Returns:
-        tuple: (valid_topics, warnings)
-    """
-    valid_topics = []
-    warnings = []
-    
-    for topic in topics_list:
-        # Clean up topic
-        cleaned_topic = topic.strip()
-        
-        # Skip empty topics
-        if not cleaned_topic:
-            continue
-            
-        # Check minimum length
-        if len(cleaned_topic) < 3:
-            warnings.append(f"Topic too short (skipped): '{cleaned_topic}'")
-            continue
-            
-        # Check maximum length
-        if len(cleaned_topic) > 200:
-            warnings.append(f"Topic too long (truncated): '{cleaned_topic[:50]}...'")
-            cleaned_topic = cleaned_topic[:200]
-            
-        # Remove excessive punctuation and normalize
-        cleaned_topic = re.sub(r'[^\w\s\-\?\!\.]+', '', cleaned_topic)
-        cleaned_topic = re.sub(r'\s+', ' ', cleaned_topic)  # Remove extra spaces
-        
-        # Capitalize first letter
-        cleaned_topic = cleaned_topic[0].upper() + cleaned_topic[1:] if len(cleaned_topic) > 1 else cleaned_topic.upper()
-        
-        # Check for duplicates (case insensitive)
-        if cleaned_topic.lower() not in [t.lower() for t in valid_topics]:
-            valid_topics.append(cleaned_topic)
-        else:
-            warnings.append(f"Duplicate topic removed: '{cleaned_topic}'")
-    
-    return valid_topics, warnings
+
+
+
+
+
+
+
+
+
 
 def create_theme_confidence_chart(theme_data):
     """Create theme confidence distribution histogram"""
@@ -1137,122 +1028,11 @@ def create_network_visualization(extracted_themes, relationship_analysis):
         print(f"Error creating network visualization: {e}")
         return None
 
-def calculate_alignment_data(research_topics, extracted_themes):
-    """Calculate topic-theme alignment data"""
-    alignment_data = []
-    for topic in research_topics:
-        topic_lower = topic.lower()
-        topic_type = "Question" if "?" in topic else "Topic"
-        
-        for theme in extracted_themes:
-            theme_name = theme['name']
-            theme_lower = theme_name.lower()
-            
-            # Calculate alignment
-            topic_words = set(topic_lower.split())
-            theme_words = set(theme_lower.split())
-            
-            if topic_words and theme_words:
-                word_alignment = len(topic_words.intersection(theme_words)) / len(topic_words.union(theme_words))
-            else:
-                word_alignment = 0
-            
-            # Check description alignment
-            description = theme.get('description', '').lower()
-            desc_alignment = sum(1 for word in topic_words if word in description) / len(topic_words) if topic_words else 0
-            
-            final_alignment = max(word_alignment, desc_alignment * 0.8)
-            
-            if final_alignment > 0.1:  # Only show meaningful alignments
-                alignment_data.append({
-                    'Research Input': topic[:50] + '...' if len(topic) > 50 else topic,
-                    'Type': topic_type,
-                    'Theme': theme_name,
-                    'Alignment Score': final_alignment,
-                    'Theme Confidence': theme.get('confidence', 0),
-                    'Full Topic': topic
-                })
-    
-    return alignment_data
 
-def calculate_topic_coverage(research_topics, extracted_themes):
-    """Calculate topic coverage statistics"""
-    topic_coverage = []
-    for topic in research_topics:
-        topic_lower = topic.lower()
-        topic_type = "Question" if "?" in topic else "Topic"
-        related_count = 0
-        max_alignment = 0
-        
-        for theme in extracted_themes:
-            theme_lower = theme['name'].lower()
-            topic_words = set(topic_lower.split())
-            theme_words = set(theme_lower.split())
-            
-            if topic_words and theme_words:
-                alignment = len(topic_words.intersection(theme_words)) / len(topic_words.union(theme_words))
-            else:
-                alignment = 0
-            
-            description = theme.get('description', '').lower()
-            desc_alignment = sum(1 for word in topic_words if word in description) / len(topic_words) if topic_words else 0
-            final_alignment = max(alignment, desc_alignment * 0.8)
-            
-            if final_alignment > 0.15:
-                related_count += 1
-                max_alignment = max(max_alignment, final_alignment)
-        
-        topic_coverage.append({
-            'Research Input': topic[:40] + '...' if len(topic) > 40 else topic,
-            'Type': topic_type,
-            'Related Themes': related_count,
-            'Best Alignment': max_alignment,
-            'Coverage Status': 'Good' if related_count >= 2 else 'Partial' if related_count == 1 else 'Poor'
-        })
-    
-    return topic_coverage
 
-def generate_insights(topic_coverage, theme_data, alignment_data):
-    """Generate AI insights based on analysis results"""
-    insights = []
-    
-    # Coverage insights
-    good_coverage = len([t for t in topic_coverage if t['Coverage Status'] == 'Good'])
-    poor_coverage = len([t for t in topic_coverage if t['Coverage Status'] == 'Poor'])
-    
-    if good_coverage > poor_coverage:
-        insights.append("✅ Most research topics have good theme coverage in the document")
-    elif poor_coverage > good_coverage:
-        insights.append("⚠️ Many research topics lack related themes - consider refining topics or checking document relevance")
-    else:
-        insights.append("📊 Mixed coverage - some topics well represented, others not found")
-    
-    # Confidence insights
-    high_conf_themes = len([t for t in theme_data if t['Confidence'] > 0.7])
-    total_themes = len(theme_data)
-    
-    if total_themes > 0:
-        if high_conf_themes / total_themes > 0.6:
-            insights.append("🎯 High-quality analysis with most themes having strong confidence scores")
-        elif high_conf_themes / total_themes > 0.3:
-            insights.append("📈 Moderate analysis quality - consider adjusting relevance threshold")
-        else:
-            insights.append("⚡ Lower confidence themes - document may not strongly match research topics")
-    
-    # Alignment insights
-    if alignment_data:
-        import pandas as pd
-        df_alignment = pd.DataFrame(alignment_data)
-        avg_alignment = df_alignment['Alignment Score'].mean()
-        
-        if avg_alignment > 0.4:
-            insights.append("🔗 Strong alignment between research topics and extracted themes")
-        elif avg_alignment > 0.2:
-            insights.append("🔍 Moderate alignment - some thematic overlap found")
-        else:
-            insights.append("❓ Weak alignment - extracted themes may be broader than research focus")
-    
-    return insights
+
+
+
 
 def _display_theme_relevance_charts(extracted_themes, research_topics, viz_data):
     """Display interactive charts showing theme relevance and relationships"""
@@ -1482,10 +1262,12 @@ def main():
             custom_list = [topic.strip() for topic in custom_topics_text.split('\n') if topic.strip()]
             raw_topics.extend(custom_list)
         
-        # Add research questions as topics
+        # Store research questions separately for relevance calculation
+        research_questions_list = []
         if research_questions.strip():
-            questions_list = [q.strip() for q in research_questions.split('\n') if q.strip()]
-            raw_topics.extend(questions_list)
+            research_questions_list = [q.strip() for q in research_questions.split('\n') if q.strip()]
+            # Also add research questions as topics for broader analysis
+            raw_topics.extend(research_questions_list)
         
         # Validate and format topics
         all_topics, topic_warnings = validate_and_format_topics(raw_topics)
@@ -1601,16 +1383,28 @@ def main():
             # Step 4: Extract themes
             current_step += 1
             progress_placeholder.progress(current_step / total_steps)
-            status_placeholder.info(f"Step {current_step}/{total_steps}: Extracting themes and calculating relevance...")
+            status_placeholder.info(f"Step {current_step}/{total_steps}: Extracting themes...")
             
             extracted_themes = analyzer.extract_themes_from_chunks(relevant_chunks, all_topics, max_themes=max_themes)
             
+            # Step 4.5: Calculate relevance scores based on user inputs
+            current_step += 0.5
+            progress_placeholder.progress(current_step / total_steps)
+            status_placeholder.info(f"Step {current_step}/{total_steps}: Calculating theme relevance to your research...")
+            
+            # Calculate relevance scores based on user's topics and questions
+            extracted_themes = analyzer.calculate_theme_relevance_scores(
+                extracted_themes, all_topics, research_questions_list
+            )
+            
             # Step 5: Calculate relationships
-            current_step += 1
+            current_step += 0.5
             progress_placeholder.progress(current_step / total_steps)
             status_placeholder.info(f"Step {current_step}/{total_steps}: Analyzing theme relationships...")
             
-            relationship_analysis = calc.calculate_theme_relationships(extracted_themes, chunks)
+            relationship_analysis = calc.calculate_theme_relationships(
+                extracted_themes, chunks, all_topics, research_questions_list
+            )
             
             # Step 6: Prepare visualization
             current_step += 1
@@ -1631,6 +1425,7 @@ def main():
                 'relationship_analysis': relationship_analysis,
                 'viz_data': viz_data,
                 'research_topics': all_topics,
+                'research_questions': research_questions_list,
                 'topic_warnings': topic_warnings,
                 'document_name': uploaded_file.name
             }
@@ -1660,12 +1455,21 @@ def main():
             ), unsafe_allow_html=True)
         
         with col2:
-            relevance_rate = (len(results['relevant_chunks']) / len(results['chunks'])) * 100 if results['chunks'] else 0
+            # Calculate relevance rate based on theme alignment with user's research inputs
+            if results['extracted_themes'] and (results['research_topics'] or results.get('research_questions')):
+                # Calculate average relevance score across all themes
+                avg_relevance_score = sum(theme.get('relevance_score', 0) for theme in results['extracted_themes']) / len(results['extracted_themes'])
+                # Convert to percentage (relevance_score is 0-10, so multiply by 10)
+                relevance_rate = avg_relevance_score * 10
+            else:
+                # Fallback to chunk-based relevance if no themes or research inputs
+                relevance_rate = (len(results['relevant_chunks']) / len(results['chunks'])) * 100 if results['chunks'] else 0
+            
             st.markdown(create_metric_card(
-                "Relevant Content", 
+                "Research Alignment", 
                 f"{len(results['relevant_chunks'])} chunks", 
                 "check-circle",
-                f"{relevance_rate:.1f}% relevance rate"
+                f"{relevance_rate:.1f}% alignment with your research"
             ), unsafe_allow_html=True)
         
         with col3:
@@ -1729,17 +1533,20 @@ def main():
             # Overview Tab
             with tabs[0]:
                 st.markdown(f"### {get_bootstrap_icon('bullseye')} Extracted Themes Overview", unsafe_allow_html=True)
+                
+
                 st.write("All themes found in the document:")
                 
                 # Display all extracted themes
                 for theme in results['extracted_themes']:
-                    with st.expander(f"**{theme['name']}** - Confidence: {theme.get('confidence', 0):.2f}"):
+                    with st.expander(f"**{theme['name']}** - Relevance: {theme.get('relevance_score', 0):.1f}/10"):
                         col1, col2 = st.columns([2, 1])
                         
                         with col1:
                             st.write(f"**Description:** {theme.get('description', 'No description')}")
                             st.write(f"**Source:** {theme.get('source', 'unknown')}")
                             st.write(f"**Chunk Frequency:** {theme.get('chunk_frequency', 0)}")
+                            st.write(f"**Relevance Score:** {theme.get('relevance_score', 0):.1f}/10")
                             
                             # Evidence
                             evidence = theme.get('evidence', [])
@@ -1993,6 +1800,8 @@ def main():
                             
                             for insight in insights:
                                 st.write(f"• {insight}")
+                            
+
                         
                         else:
                             st.info("No meaningful alignments found between research topics and extracted themes. This could mean:")
